@@ -194,6 +194,13 @@ an owner-only temporary public test CA; private TLS keys remain in memory and
 certificate verification stays enabled. No service endpoint override, production
 test switch, AWS call or host AWS profile is used. Exit statuses and top-level
 stderr diagnostics are checked along with session/stream/cleanup behavior.
+The `shell/tty-sigterm` case additionally attaches a private Linux PTY to the
+actual executable. Its synthetic peer must receive initial 80x24 dimensions
+before the test verifies raw mode and sends a real SIGTERM. The child must return
+130, make one owned TerminateSession request and restore the exact original
+termios state before process join returns. The user's terminal is untouched;
+failure cleanup kills/reaps the child before closing the private PTY. This does
+not prove physical Ctrl+C/D, changed dimensions or full-screen remote apps.
 This still does not prove live AWS, ARM64 runtime or remote TTY/application behavior.
 
 The private plugin credential relay also has opted-in OS socket tests:

@@ -781,14 +781,19 @@ EC2/SSM/ssmmessages/KMS host:443 requests and tunnels exclusively to the local
 synthetic TLS service. The child has explicit fake environment credentials,
 /dev/null shared config/credentials, disabled IMDS, an owner-only temporary public
 test CA selected through --ca-cert and explicit proxy; no inherited app environment, endpoint override or
-disabled TLS verification. Private TLS keys stay in memory. All eleven command/
-pipe-shell cases also exercise real process exit codes/top-level diagnostics and
+disabled TLS verification. Private TLS keys stay in memory. All twelve command/
+shell cases also exercise real process exit codes/top-level diagnostics and
 fresh owned cleanup, with signed fake identity/service/region assertions.
 Cleanup-denial cases assert the real SDK error reaches diagnostics as only its
 allowlisted service code and HTTP status, without response-body secrets. Proxy
 admission closes before joining relay workers; sockets have twelve-second bounds.
-This is compiled native-host local integration, not live AWS, ARM64 execution or
-a physical TTY/app test. It uses ordinary supported production proxy/CA settings;
+The additional tty-sigterm case gives the compiled child a private Linux PTY,
+waits for authenticated initial 80x24 size delivery, checks raw termios, sends
+actual SIGTERM and requires exit 130, one owned termination and exact full-state
+restoration after process join. Failed tests kill/reap the child before PTY close;
+the developer's terminal is never used. This is compiled native-host local
+integration, not live AWS, ARM64 execution or remote TTY/application proof.
+It uses ordinary supported production proxy/CA settings;
 no production test hook/backdoor is added.
 Its offline isolation test verifies build settings exclude host credentials,
 profiles, proxies/loader/overlay flags, while preserving trusted tooling/cache

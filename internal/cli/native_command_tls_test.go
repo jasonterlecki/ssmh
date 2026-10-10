@@ -49,6 +49,9 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 	modes := []string{"plain", "encrypted", "key-denied", "corrupt-output", "missing-status", "cleanup-denied", "upgrade-denied"}
 	if shell {
 		modes = []string{"plain", "network-drop", "cleanup-denied", "upgrade-denied"}
+		if executable != nil {
+			modes = append(modes, "tty-sigterm")
+		}
 	}
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
@@ -57,6 +60,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 			material := append(bytes.Repeat([]byte{0x31}, 32), bytes.Repeat([]byte{0x72}, 32)...)
 			var starts, ends, keys atomic.Int32
 			peerDone := make(chan error, 1)
+			ttyReady := make(chan struct{})
 			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if executable != nil && !compositionSignedRequest(r) {
 					t.Error("compiled invocation lost signed selected-service routing")
@@ -71,7 +75,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 						return
 					}
 					if shell {
-						peerDone <- composedPlainShellPeer(r, w, mode)
+						peerDone <- composedPlainShellPeer(r, w, mode, ttyReady)
 					} else {
 						peerDone <- composedCommandPeer(r, w, encrypted, mode, material, keyARN)
 					}
@@ -195,6 +199,8 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 			var input *os.File
 			if shell {
 				args = []string{"-i", cliTarget, "-r", "ca-central-1", "-q"}
+			}
+			if shell && mode != "tty-sigterm" {
 				read, write, err := os.Pipe()
 				if err != nil {
 					t.Fatal("cannot create synthetic shell input")
@@ -224,7 +230,11 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 				cmd.Stderr = stderr
 				cmd.Stdin = input
 				cmd.WaitDelay = time.Second
-				err = cmd.Run()
+				if mode == "tty-sigterm" {
+					err = compositionTTYSignal(t, ctx, cmd, ttyReady)
+				} else {
+					err = cmd.Run()
+				}
 				if err != nil {
 					var exit *exec.ExitError
 					if errors.As(err, &exit) {
@@ -269,6 +279,9 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 			if mode == "upgrade-denied" && (code != 1 || ctx.Err() != nil) {
 				t.Fatal("authorization denial did not fail promptly with local failure status")
 			}
+			if mode == "tty-sigterm" && (code != 130 || ctx.Err() != nil) {
+				t.Fatal("compiled TTY SIGTERM did not return controlled cancellation after cleanup")
+			}
 			if mode == "cleanup-denied" {
 				diagnostic := err.Error()
 				if executable != nil {
@@ -292,7 +305,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 
 const compositionShellOutput = "synthetic shell λ\x1b[32mcolor\x1b[0m\r\n"
 
-func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string) error {
+func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string, ttyReady chan<- struct{}) error {
 	conn, buffer, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		return err
@@ -331,6 +344,24 @@ func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string)
 	m, decodeErr := native.Decode(data)
 	if err != nil || op != 2 || decodeErr != nil || m.Type != "acknowledge" {
 		return errors.New("composed shell first-output ACK missing")
+	}
+	if mode == "tty-sigterm" {
+		op, data, err = compositionReadWS(buffer)
+		m, decodeErr = native.Decode(data)
+		var size struct{ Cols, Rows int }
+		if err != nil || op != 2 || decodeErr != nil || m.Type != "input_stream_data" || m.PayloadType != native.Size || json.Unmarshal(m.Payload, &size) != nil || size.Cols != 80 || size.Rows != 24 {
+			return errors.New("compiled TTY initial dimensions changed")
+		}
+		ack, _ := json.Marshal(map[string]any{"AcknowledgedMessageType": m.Type, "AcknowledgedMessageId": m.ID.String(), "AcknowledgedMessageSequenceNumber": m.Sequence, "IsSequentialMessage": true})
+		if err = send("acknowledge", 0, 0, ack); err != nil {
+			return err
+		}
+		close(ttyReady)
+		op, _, err = compositionReadWS(buffer)
+		if err == io.EOF || err == io.ErrUnexpectedEOF || err == nil && op == 8 {
+			return nil
+		}
+		return errors.New("compiled TTY signal did not close the channel")
 	}
 	var received []byte
 	for len(received) < len("synthetic shell input\n\x03\x04") {

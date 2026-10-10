@@ -18,15 +18,86 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 type compositionExecutable struct {
 	path, roots string
 	certificate tls.Certificate
+}
+
+// Exercise the real process signal boundary with a private PTY, never the user's
+// terminal. The synthetic peer confirms resize delivery before SIGTERM; a raw
+// ioctl observation alone would not prove channel establishment.
+func compositionTTYSignal(t *testing.T, ctx context.Context, cmd *exec.Cmd, ready <-chan struct{}) error {
+	t.Helper()
+	master, err := unix.Open("/dev/ptmx", unix.O_RDWR|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal("cannot open private compiled-client PTY")
+	}
+	defer unix.Close(master)
+	if unix.IoctlSetPointerInt(master, unix.TIOCSPTLCK, 0) != nil {
+		t.Fatal("cannot unlock private compiled-client PTY")
+	}
+	number, err := unix.IoctlGetInt(master, unix.TIOCGPTN)
+	if err != nil {
+		t.Fatal("cannot identify private compiled-client PTY")
+	}
+	slave, err := os.OpenFile("/dev/pts/"+strconv.Itoa(number), os.O_RDWR|unix.O_NOCTTY, 0)
+	if err != nil {
+		t.Fatal("cannot open compiled-client PTY slave")
+	}
+	defer slave.Close()
+	fd := int(slave.Fd()) // This owned descriptor is not used by Go's poller.
+	before, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	if err != nil || unix.IoctlSetWinsize(fd, unix.TIOCSWINSZ, &unix.Winsize{Col: 80, Row: 24}) != nil {
+		t.Fatal("cannot prepare compiled-client PTY state")
+	}
+	cmd.Stdin = slave
+	if cmd.Start() != nil {
+		t.Fatal("cannot start compiled TTY client")
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	joined := false
+	defer func() {
+		if !joined {
+			_ = cmd.Process.Kill()
+			<-done
+		}
+	}()
+	select {
+	case <-ready:
+	case <-done:
+		joined = true
+		t.Fatal("compiled TTY client exited before dimension delivery")
+	case <-ctx.Done():
+		t.Fatal("compiled TTY establishment exceeded its budget")
+	}
+	raw, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	if err != nil || raw.Lflag&(unix.ECHO|unix.ICANON|unix.ISIG) != 0 {
+		t.Fatal("compiled TTY client did not enter raw mode")
+	}
+	if cmd.Process.Signal(unix.SIGTERM) != nil {
+		t.Fatal("cannot signal compiled TTY client")
+	}
+	select {
+	case err = <-done:
+		joined = true
+	case <-ctx.Done():
+		t.Fatal("compiled TTY shutdown exceeded its budget")
+	}
+	after, restoreErr := unix.IoctlGetTermios(fd, unix.TCGETS)
+	if restoreErr != nil || *after != *before {
+		t.Fatal("compiled TTY client did not restore full terminal state")
+	}
+	return err
 }
 
 // All child configuration is explicit and synthetic. The production executable
