@@ -6,8 +6,10 @@ without SSH keys, port 22, a public IP, or an SSH daemon.
 
 **Current status: initial native shell/command/forwarding client; development only.**
 Shell sessions by EC2 instance ID or exact Name are wired end to end through SDK authentication,
-SSM, the native channel, terminal handling, and owned-session cleanup. Live AWS
-interoperability has not been verified; this is not production-ready.
+SSM, the native channel, terminal handling, and owned-session cleanup. The owner
+has verified a basic live shell using the default profile in us-east-1, including
+clean remote `exit` after the cleanup fix. Broader live interoperability remains
+unverified; this is not production-ready. See the acceptance audit for scope.
 The [requirement-by-requirement acceptance audit](docs/acceptance.md) separates
 implemented/local-tested behavior from the missing live evidence and plugin work.
 Remote commands are wired through noninteractive sessions with document preflight,
@@ -196,8 +198,8 @@ Implemented library components include:
   handshake, ordered output, acknowledgement validation, bounded buffers and
   retransmissions, resize messages, and cancellation. In-memory tests exercise
   bidirectional streaming and real TLS certificate/HTTP upgrade validation.
-  It is integrated into the native-shell CLI; live AWS interoperability remains
-  unverified.
+  It is integrated into the native-shell CLI; a basic owner-run live shell works,
+  but broader protocol/TTY interoperability remains unverified.
 - Linux terminal primitives: raw mode with full-state restoration, dimensions,
   streaming line-start escapes, and cancellable pipe/TTY I/O without modifying
   inherited descriptor flags. The shell-loop library now wires input/output,

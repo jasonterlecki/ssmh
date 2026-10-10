@@ -41,6 +41,16 @@ the applicable security requirements take precedence.
 
 **Status: Initial native shell/command/forwarding executable; full requested feature set in progress**
 
+The owner has supplied live executable evidence of a basic native shell with the
+default shared profile in us-east-1 and clean remote exit after the owned-shell
+completion cleanup fix. docs/acceptance.md records its limited scope separately
+from synthetic tests and the still-unexecuted automated AWS suite. This does not
+verify custom-CA sessions, other providers/AssumeRole, remote TTY controls/apps,
+commands, forwarding or all cleanup paths. The earlier intermittent payload digest
+mismatch remains unexplained; integrity checks remain enabled. References below
+to missing live interoperability mean full-scope validation, not absence of this
+basic owner-run evidence.
+
 The repository now has a local Go module (`ssmh`, derived from the directory
 name; no remote URL is asserted). Implemented source files are
 `internal/config/config.go` (invocation, region, role, and forwarding validation),
