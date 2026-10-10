@@ -167,8 +167,10 @@ func TestLiveNativeShellTTY(t *testing.T) {
 	joined := false
 	defer func() {
 		cancel()
-		if !joined && !onlyCancellation(<-done) {
-			t.Error("live PTY terminal workers failed during cleanup")
+		if !joined {
+			if err := <-done; !onlyCancellation(err) {
+				t.Error("live PTY terminal workers failed during cleanup:", liveFailureLabel(err, 0))
+			}
 		}
 		after, err := unix.IoctlGetTermios(p.fd, unix.TCGETS)
 		if err != nil || !reflect.DeepEqual(p.before, after) {
@@ -237,6 +239,11 @@ func TestLiveNativeShellTTY(t *testing.T) {
 		joined = true
 		if err != nil {
 			t.Fatal("live PTY Ctrl+D completion failed")
+		}
+		if channel.RemoteCompleted() {
+			// Normal owned EOF is verified after terminal/channel workers join.
+			// Every failed/interrupted probe retains best-effort API cleanup.
+			session.ReleaseAfterRemoteCompletion()
 		}
 	case <-phase.Done():
 		t.Fatal("live PTY Ctrl+D did not complete the shell")

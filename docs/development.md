@@ -228,9 +228,12 @@ this relay. See [relay boundaries](plugin-backend.md).
 A Linux-only optional native suite now exists in `tests/integration`. It is not
 run by ordinary verification: each live case skips before credential resolution
 unless `SSMH_TEST_AWS` explicitly selects its operation. An invalid opt-in or
-missing configuration fails without authenticating. The suite has **not been run
-against AWS**; its existence and passing offline guards do not establish live
-interoperability. Get approval for an existing target and exact test scope first.
+missing configuration fails without authenticating. Approved check and nonce-shell
+operations passed against AWS on 2026-10-10. The PTY operation passed twice after
+two initial size-probe failures with terminal/channel shutdown errors; these
+remain unresolved. See [live evidence](acceptance.md) for precise scope and
+remaining gates. Offline guards alone do not establish live interoperability.
+Get approval for an existing target and exact test scope first.
 
 Every operation requires `SSMH_LIVE_INSTANCE` (an explicit EC2 ID, not a Name),
 `SSMH_LIVE_REGION`, and `SSMH_LIVE_ACCOUNT` (expected twelve-digit account).
@@ -280,7 +283,8 @@ capture bound this test. Split markers prevent command echo from satisfying the
 output check. Test cleanup joins terminal workers before owned AWS termination
 and compares complete termios state even after a controllable failure. Offline
 real-PTY harness tests cover these local mechanics with a synthetic channel;
-they do not prove remote behavior. This live operation has **not been run**.
+they do not prove remote behavior. The approved live operation passed twice on
+2026-10-10 after two failed size-probe attempts; no reliability claim is made.
 External SIGINT/SIGTERM, full-screen applications and the complete CLI process
 are not covered by this case.
 
@@ -317,7 +321,7 @@ omit remote output, auth objects, signed URLs and raw SDK errors. Nothing writes
 transcripts to disk. AWS/agent logging settings remain unchanged. The suite tests
 production libraries/native transport, not the complete executable CLI lifecycle,
 plugin backend or ARM64 runtime. The separately selected shell-tty case extends
-the library path to real terminal behavior but remains live-unverified; it does
+the library path to real terminal behavior with the limited results above; it does
 not run the complete CLI executable. Record each actual
 selected operation/result before making any live-validation claim.
 

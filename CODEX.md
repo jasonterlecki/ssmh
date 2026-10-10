@@ -44,12 +44,26 @@ the applicable security requirements take precedence.
 The owner has supplied live executable evidence of a basic native shell with the
 default shared profile in us-east-1 and clean remote exit after the owned-shell
 completion cleanup fix. docs/acceptance.md records its limited scope separately
-from synthetic tests and the still-unexecuted automated AWS suite. This does not
+from synthetic tests and the separately scoped automated AWS evidence. This does not
 verify custom-CA sessions, other providers/AssumeRole, remote TTY controls/apps,
 commands, forwarding or all cleanup paths. The earlier intermittent payload digest
 mismatch remains unexplained; integrity checks remain enabled. References below
 to missing live interoperability mean full-scope validation, not absence of this
 basic owner-run evidence.
+
+Approved live validation on 2026-10-10 used the existing target/default profile:
+read-only prerequisites and nonce shell passed; PTY had two initial size-probe
+failures with unclassified terminal/channel shutdown errors, then passed twice
+(remote initial/resized sizes, Ctrl+C usability, Ctrl+D, full local restoration).
+Compiled --check/--list JSON also succeeded. AWS history showed all five newly
+started sessions Terminated and Active returned no rows/no next token. These are
+point-in-time results, not reliability or full-scope acceptance. No resources,
+permissions, preferences or services were changed. Live suite normal shell cleanup
+now releases ownership only after successful joined operation and RemoteCompleted;
+failed probes retain explicit termination. liveFailureLabel maps bounded error
+trees to exact fixed labels only, with guard tests for redaction and depth limits.
+Command, forwarding, roles/SSO, KMS, full-screen apps and ARM64 runtime remain
+unverified; docs/acceptance.md retains these gates and the failed PTY evidence.
 
 The repository now has a local Go module (`ssmh`, derived from the directory
 name; no remote URL is asserted). Implemented source files are
@@ -2243,8 +2257,11 @@ real-PTY tests exercise the harness with a synthetic channel, physical control
 bytes, SIGWINCH, bounded/redacted collection and restoration, not live AWS proof.
 The production library/native/terminal path is covered, not the complete CLI
 process, external termination signals, full-screen apps or ARM64 runtime.
-Live cases remain unexecuted/unverified pending approved
-credentials/target/test scope; default runs skip before credential resolution.
+Live check/shell and two of four shell-tty attempts passed under explicit approval
+on 2026-10-10; the two earlier PTY failures remain unresolved. Commands/forwarding
+still need approved document/service configuration; default runs skip before
+credential resolution. Completed normal shell probes now match production's
+RemoteCompleted ownership release, while failed probes retain API cleanup.
 
 ### tests/documentation/
 

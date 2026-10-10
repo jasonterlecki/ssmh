@@ -24,6 +24,26 @@ type guardIdentity struct {
 	calls   int
 }
 
+func TestLiveFailureLabelsAreBoundedAndRedacted(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{nil, "none"},
+		{errors.New("synthetic-secret"), "unclassified"},
+		{errors.Join(context.Canceled, errors.New("synthetic-secret"), errors.New("SSM payload digest mismatch")), "payload-digest-mismatch"},
+		{context.DeadlineExceeded, "timeout"},
+		{errors.New("unexpected or stale SSM acknowledgement"), "invalid-acknowledgement"},
+		{errors.New("cannot read local input"), "local-terminal-io"},
+		{errors.New("SSM agent reported a session error"), "remote-session-error"},
+		{errors.New("SSM payload digest mismatch synthetic-secret"), "unclassified"},
+	} {
+		if liveFailureLabel(tc.err, 0) != tc.want || liveFailureLabel(tc.err, 8) != "unclassified" && tc.err != nil {
+			t.Fatal("live failure diagnostic leaked, lost classification or exceeded traversal bound")
+		}
+	}
+}
+
 func (g *guardIdentity) GetCallerIdentity(context.Context, *sts.GetCallerIdentityInput, ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error) {
 	g.calls++
 	return &sts.GetCallerIdentityOutput{Account: sdkaws.String(g.account), Arn: sdkaws.String("arn:aws:iam::" + g.account + ":user/synthetic")}, g.err

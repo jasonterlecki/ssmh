@@ -184,10 +184,69 @@ func ownLiveChannel(t *testing.T, channel *native.Channel) {
 		t.Fatal("live native connection returned no channel")
 	}
 	t.Cleanup(func() {
-		if !onlyCancellation(channel.Close()) {
-			t.Error("live channel cleanup failed (payloads omitted)")
+		if err := channel.Close(); !onlyCancellation(err) {
+			t.Error("live channel cleanup failed:", liveFailureLabel(err, 0))
 		}
 	})
+}
+
+// Fixed labels only: even wrapped native/network/provider errors may contain
+// authentication material. Bounded traversal never prints arbitrary causes.
+func liveFailureLabel(err error, depth int) string {
+	remaining := 64
+	return liveFailureLabelBudget(err, depth, &remaining)
+}
+
+func liveFailureLabelBudget(err error, depth int, remaining *int) string {
+	if err == nil {
+		return "none"
+	}
+	if depth >= 8 || *remaining == 0 {
+		return "unclassified"
+	}
+	*remaining--
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		children := joined.Unwrap()
+		for _, child := range children[:min(len(children), 16)] {
+			if label := liveFailureLabelBudget(child, depth+1, remaining); label != "none" && label != "unclassified" && label != "canceled" {
+				return label
+			}
+		}
+		return "unclassified"
+	} else if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return liveFailureLabelBudget(wrapped.Unwrap(), depth+1, remaining)
+	}
+	switch err.Error() {
+	case "SSM payload digest mismatch":
+		return "payload-digest-mismatch"
+	case "invalid SSM sequence or flags":
+		return "invalid-sequence-or-flags"
+	case "unsupported SSM payload type":
+		return "unsupported-payload-type"
+	case "unsupported SSM message schema":
+		return "unsupported-message-schema"
+	case "invalid SSM acknowledgement", "SSM acknowledgement identity mismatch", "unexpected or stale SSM acknowledgement":
+		return "invalid-acknowledgement"
+	case "SSM acknowledgement timed out after bounded retransmissions":
+		return "acknowledgement-timeout"
+	case "invalid terminal dimensions", "unsupported native input payload":
+		return "invalid-terminal-input"
+	case "unexpected or unsupported SSM stream payload", "unexpected native interactive terminal payload":
+		return "unsupported-terminal-output"
+	case "Session Manager WebSocket disconnected", "Session Manager WebSocket closed before session completion", "write Session Manager WebSocket failed":
+		return "websocket-disconnect"
+	case "SSM service ended the session with an error; check Session Manager policies and agent status", "SSM agent reported a session error":
+		return "remote-session-error"
+	case "cannot read local input", "cannot write local output", "cannot poll local stream":
+		return "local-terminal-io"
+	}
+	if err == context.Canceled {
+		return "canceled"
+	}
+	if err == context.DeadlineExceeded {
+		return "timeout"
+	}
+	return "unclassified"
 }
 
 // Cancellation never masks an independent or wrapped cleanup failure.
@@ -249,6 +308,11 @@ func TestLiveNativeShell(t *testing.T) {
 	stdout, _, err := captureOperation(r.ctx, script, func(ctx context.Context, input, output, stderr *os.File) error {
 		return terminal.Run(ctx, channel, input, output, stderr)
 	})
+	if err == nil && channel.RemoteCompleted() {
+		// Match production shell cleanup only after successful joined shutdown and
+		// authenticated owned EOF; transport loss still needs explicit termination.
+		session.ReleaseAfterRemoteCompletion()
+	}
 	if err != nil || !bytes.Contains(stdout, []byte(marker)) {
 		t.Fatal("live shell nonce/owned completion failed; remote output omitted")
 	}

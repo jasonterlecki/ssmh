@@ -217,7 +217,9 @@ Implemented library components include:
 Optional live native tests now exist for read-only checks, piped shells, command
 streams/exit status and forwarding to an approved existing echo service. They
 skip by default, require explicit operation/target/account selection, provision
-no resources, and have not yet been run against AWS. See
+no resources. Approved live check and nonce-shell tests passed on 2026-10-10;
+the PTY test passed twice after two initial size-probe failures. Those failures
+remain unresolved, so this is not a reliability or production-readiness claim. See
 [live test authorization and invocation](docs/development.md).
 
 Native forwarding now composes listener creation, selected SDK authentication,
