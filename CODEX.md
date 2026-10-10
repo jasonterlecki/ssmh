@@ -68,7 +68,8 @@ unverified; docs/acceptance.md retains these gates and the failed PTY evidence.
 The repository now has a local Go module (`ssmh`, derived from the directory
 name; no remote URL is asserted). Implemented source files are
 `internal/config/config.go` (invocation, region, role, and forwarding validation),
-`internal/cli/flags.go` (argument parsing), `internal/aws/client.go` (SDK credential
+`internal/cli/flags.go` (argument parsing), `internal/cli/alias.go` (strict private
+connection aliases and interactive creation), `internal/aws/client.go` (SDK credential
 chain and refreshable explicit AssumeRole), `internal/ssm/session.go` (owned session
 creation, validated transport material and retryable cleanup),
 `internal/ssm/availability.go` (complete bounded exact-target readiness), and
@@ -393,6 +394,7 @@ ssmh/
 ├── PROMPT.md
 ├── TODO.md
 ├── README.md
+├── alias.example.yaml
 ├── LICENSE
 ├── Makefile
 ├── main.go
@@ -418,6 +420,7 @@ ssmh/
 │   │   ├── check.go
 │   │   ├── forward.go
 │   │   ├── flags.go
+│   │   ├── alias.go
 │   │   ├── native_command_tls_test.go
 │   │   ├── native_executable_tls_test.go
 │   │   └── output.go
@@ -622,6 +625,9 @@ its repository file links, not correctness of live results or command effects.
 
 Status: IMPLEMENTED (foundation documentation; complete user guide still planned)
 
+The connection-alias section documents strict private `~/.aws/alias.yaml`,
+interactive `--aliasinit`, supported fields and command-line precedence.
+
 Purpose:
 
 Primary user documentation. Currently describes the implemented libraries,
@@ -643,6 +649,14 @@ Should cover:
 - Known limitations.
 
 Only document functioning capabilities as available.
+
+### alias.example.yaml
+
+Status: IMPLEMENTED (synthetic example only)
+
+Version 1 connection-alias schema with no credentials or live instance data.
+The real file is created under the user's `~/.aws` directory and never stored
+in the repository.
 
 ### LICENSE
 
@@ -683,6 +697,8 @@ Purpose:
 Go module definition and dependency verification.
 
 Use AWS SDK for Go v2.
+The maintained `go.yaml.in/yaml/v3` module parses bounded, strict alias files;
+alias.go rejects unsupported YAML features and validates every saved setting.
 
 Avoid unnecessary dependencies.
 
@@ -773,7 +789,13 @@ Business logic must not accumulate in main.go.
 ## 6. CLI Package
 
 Current files: `flags.go` and `flags_test.go` implement/test parsing and option
-validation. `root.go` and `connect.go` add native-shell orchestration through
+validation. `alias.go` and `alias_test.go` implement/test owner-only
+`~/.aws/alias.yaml` reading, strict single-document YAML, bounded alias names and
+entries, explicit CLI precedence, and interactive atomic creation with overwrite
+confirmation. Aliases supply only connection settings and never credentials,
+MFA tokens, commands or forwarding targets; optional STS external IDs are held
+in the private alias file. `root.go` and
+`connect.go` add native-shell orchestration through
 SDK/channel/terminal test boundaries; the implemented list/check/output/forward
 files are described below.
 `diagnostics.go` and `diagnostics_test.go` implement/test fixed stage reporting,
@@ -944,6 +966,10 @@ forwarding lifecycle orchestration shares connect.go; forward_test.go tests it.
 
 Shared CLI argument definitions.
 
+`--alias`/`-a` applies validated saved settings before normal invocation
+validation; `--aliasinit [NAME]` is an isolated local questionnaire and never
+loads AWS credentials or starts a session.
+
 ### output.go
 
 Implemented listing table and ASCII-only JSON formatting with seven explicit
@@ -979,6 +1005,8 @@ validation is in config.go and literal KMS key/region policy in kms.go;
 `validate.go` below is planned. Region resolution does not invent a
 default. `ForwardTarget.Validate` rechecks exported fields at listener/native
 resource boundaries without DNS or normalization; Address returns only loopback.
+Options also carries the selected alias and isolated initializer request;
+the CLI resolves alias values before calling the existing option validator.
 `forward_target_test.go` tests direct construction and parser agreement. Fuzz seeds cover forwarding
 parsing; native protocol fuzz targets live in `internal/transport/native`.
 
@@ -2552,6 +2580,7 @@ The following components require particular scrutiny.
 | Port forwarding | CRITICAL | Local network exposure |
 | Logging | CRITICAL | Sensitive-data protection |
 | CLI | HIGH | Input validation and safe behavior |
+| Alias configuration | HIGH | Private file ownership, strict YAML, explicit target and identity selection, safe atomic writes |
 | Build/release | HIGH | Dependency and artifact integrity |
 
 When a CRITICAL component changes, the agent MUST perform an

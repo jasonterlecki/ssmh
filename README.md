@@ -75,6 +75,41 @@ make build
 ./bin/ssmh -i i-0123456789abcdef0 -p production -r ca-central-1
 ```
 
+### Connection aliases
+
+Use `./bin/ssmh --aliasinit [NAME]` to answer a questionnaire and create or
+update `~/.aws/alias.yaml`. With no name, the first question asks for one. An
+existing alias requires an explicit `yes` before it is replaced. The file is
+written atomically with owner-only permissions; an existing file must already be
+a regular, owner-owned `0600` file in an owner-owned directory without group or
+world write access. `alias.example.yaml` shows the strict version 1 format with
+synthetic values. If you copy it manually, run `chmod 600 ~/.aws/alias.yaml`.
+When updating an alias, a blank answer keeps that field and `-` clears it; the
+initializer rewrites the YAML file, so comments in it are not preserved.
+
+```sh
+./bin/ssmh --aliasinit production
+./bin/ssmh --alias production
+./bin/ssmh -a production --check
+./bin/ssmh -a production --region us-east-1
+```
+
+Aliases supply the instance, region, profile, optional role ARN, STS session
+name, optional STS external ID, MFA device ARN, CA path, shell document, reason,
+backend, timeout and duration. Explicit command-line values override alias values. All resolved
+options pass the same validation as a direct invocation. Alias files reject
+unknown or duplicate YAML fields, multiple documents, anchors and invalid
+connection settings. Alias names contain only letters, digits, `_` and `-`,
+beginning with a letter. The file is limited to 64 KiB and 100 aliases.
+
+An alias cannot store credentials, MFA codes, remote commands or
+forwarding targets. Supply those explicitly when needed. An alias cannot
+change AWS permissions or select a different identity without its configured
+profile or role being visible in the file. Review `~/.aws/alias.yaml` before
+using aliases from another source; an explicit custom document can affect the
+remote session configuration. Treat a stored external ID as sensitive and keep
+the alias file private.
+
 Plain `go build` at the repository root also produces `./ssmh` through the same
 process/CLI implementation. Use `CGO_ENABLED=0 go build` for a CGO-free local
 binary, or `make release` for the stripped, path-trimmed cross-builds below.

@@ -20,6 +20,8 @@ type Options struct {
 	Command, Document, Reason, Backend                          string
 	Forward, ForwardHost                                        string
 	Name, State                                                 string
+	Alias, AliasInitName                                        string
+	AliasInit                                                   bool
 	Tags                                                        []string
 	Timeout, Duration                                           time.Duration
 	List, Check, JSON, Verbose, Debug, Quiet, Help, Version     bool

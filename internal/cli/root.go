@@ -91,7 +91,7 @@ func run(ctx context.Context, args []string, input, output, stderr *os.File, d d
 	}
 	if o.Help {
 		var help bytes.Buffer
-		help.WriteString("Usage: ssmh --instance INSTANCE_ID_OR_NAME [options]\n       ssmh --list [--json] [filters]\n       ssmh --check --instance INSTANCE_ID_OR_NAME [--json]\n\nNative SSM shell, commands, TCP forwarding and read-only discovery/checks (development build).\nShell disconnect: Enter, then ~. ; literal tilde at line start: ~~.\n\n")
+		help.WriteString("Usage: ssmh --instance INSTANCE_ID_OR_NAME [options]\n       ssmh --alias NAME [options]\n       ssmh --aliasinit [NAME]\n       ssmh --list [--json] [filters]\n       ssmh --check --instance INSTANCE_ID_OR_NAME [--json]\n\nNative SSM shell, commands, TCP forwarding and read-only discovery/checks (development build).\nShell disconnect: Enter, then ~. ; literal tilde at line start: ~~.\n\n")
 		var defaults config.Options
 		Flags(&defaults, &help).PrintDefaults()
 		help.WriteString("\n--command uses remote /bin/sh -c, separate output and verified exit status.\nA compatible non-elevated NonInteractiveCommands document is required; see docs/remote-commands.md.\nForwarding binds only 127.0.0.1; stop with Ctrl+C. No stdin or terminal raw mode.\nAll sessions resolve an EC2 ID or exact Name and require running plus SSM Linux/Online.\nDuplicate Names require an explicit ID; stopped duplicates are not discarded.\n--list shows SSM Online instances, defaulting to EC2 state running; filters are exact.\nListing does not prove native/Linux compatibility or StartSession permission.\n--check reads EC2/SSM/STS and the default shell document without starting a session.\nPassing prerequisites does not prove StartSession permission or data-channel connectivity.\nMFA prompting uses /dev/tty with echo disabled; never consumes redirected stdin.\nNot implemented yet: plugin backend.\n")
@@ -103,6 +103,15 @@ func run(ctx context.Context, args []string, input, output, stderr *os.File, d d
 	if o.Version {
 		if _, err := fmt.Fprintln(output, version.String()); err != nil {
 			return errors.New("cannot write version information")
+		}
+		return nil
+	}
+	if o.AliasInit {
+		if input == nil {
+			return usageError{errors.New("alias initialization requires input")}
+		}
+		if err := initAlias(o.AliasInitName, input, stderr); err != nil {
+			return usageError{err}
 		}
 		return nil
 	}

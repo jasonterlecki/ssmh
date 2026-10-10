@@ -26,6 +26,8 @@ func Flags(o *config.Options, out io.Writer) *flag.FlagSet {
 		value, help string
 	}{
 		{&o.Instance, []string{"instance", "i"}, "", "EC2 instance ID or exact Name tag"},
+		{&o.Alias, []string{"alias", "a"}, "", "load a named connection from ~/.aws/alias.yaml"},
+		{&o.AliasInitName, []string{"aliasinit"}, "", "interactively create or update an alias (optional name)"},
 		{&o.Profile, []string{"profile", "p"}, "", "AWS shared profile"},
 		{&o.Region, []string{"region", "r"}, "", "AWS region (no implicit default)"},
 		{&o.CACert, []string{"ca-cert", "ca"}, "", "PEM CA bundle path (overrides AWS_CA_BUNDLE and profile ca_bundle)"},
@@ -89,6 +91,24 @@ func Parse(args []string) (config.Options, error) {
 	if f.NArg() != 0 {
 		return config.Options{}, errors.New("unexpected positional arguments; use named options")
 	}
+	f.Visit(func(v *flag.Flag) {
+		if v.Name == "aliasinit" {
+			o.AliasInit = true
+		}
+	})
+	if o.AliasInit {
+		count := 0
+		f.Visit(func(v *flag.Flag) { count++ })
+		formOK := len(args) == 1 && (args[0] == "--aliasinit" || strings.HasPrefix(args[0], "--aliasinit=")) ||
+			len(args) == 2 && args[0] == "--aliasinit" && !strings.HasPrefix(args[1], "-")
+		if count != 1 || !formOK {
+			return config.Options{}, errors.New("--aliasinit must be used alone with an optional alias name")
+		}
+		if o.AliasInitName != "" && !validAliasName(o.AliasInitName) {
+			return config.Options{}, errors.New("invalid alias name")
+		}
+		return o, nil
+	}
 	// An explicit empty command must not silently select an interactive shell.
 	for _, a := range args {
 		if a == "--command=" || a == "-c=" {
@@ -103,6 +123,26 @@ func Parse(args []string) (config.Options, error) {
 			o.Command = "\x00"
 		}
 	})
+	if o.Alias != "" && !o.Help && !o.Version {
+		if !validAliasName(o.Alias) {
+			return config.Options{}, errors.New("invalid alias name")
+		}
+		path, err := aliasPath()
+		if err != nil {
+			return config.Options{}, err
+		}
+		file, err := loadAliases(path)
+		if err != nil {
+			return config.Options{}, err
+		}
+		entry, ok := file.Aliases[o.Alias]
+		if !ok {
+			return config.Options{}, errors.New("alias not found")
+		}
+		seen := map[string]bool{}
+		f.Visit(func(v *flag.Flag) { seen[v.Name] = true })
+		entry.apply(&o, seen)
+	}
 	return o, o.Validate()
 }
 
@@ -111,7 +151,8 @@ func Parse(args []string) (config.Options, error) {
 func normalize(args []string, f *flag.FlagSet) ([]string, error) {
 	var result []string
 	valueNext := false
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if valueNext {
 			result = append(result, arg)
 			valueNext = false
@@ -119,6 +160,15 @@ func normalize(args []string, f *flag.FlagSet) ([]string, error) {
 		}
 		if arg == "--" {
 			result = append(result, arg)
+			continue
+		}
+		if arg == "--aliasinit" {
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				result = append(result, "--aliasinit="+args[i+1])
+				i++
+			} else {
+				result = append(result, "--aliasinit=")
+			}
 			continue
 		}
 		if !strings.HasPrefix(arg, "-") || arg == "-" {

@@ -1,0 +1,18 @@
+# Copy to ~/.aws/alias.yaml and restrict permissions: chmod 600 ~/.aws/alias.yaml
+# This file contains synthetic values only. Use `ssmh --aliasinit` to create it interactively.
+version: 1
+aliases:
+  example:
+    instance: i-0123456789abcdef0
+    region: ca-central-1
+    profile: example-profile
+    # arn: arn:aws:iam::123456789012:role/ExampleSessionRole
+    # external-id: synthetic-external-id
+    # session-name: ssmh-session
+    # mfa-serial: arn:aws:iam::123456789012:mfa/example-user
+    # ca-cert: /home/example/ca-bundle.pem
+    # document: ExampleShellDocument
+    # reason: Example maintenance
+    # backend: native
+    # timeout: 30s
+    # duration: 1h
