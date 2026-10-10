@@ -12,6 +12,7 @@ clean remote `exit` after the cleanup fix. Broader live interoperability remains
 unverified; this is not production-ready. See the acceptance audit for scope.
 The [requirement-by-requirement acceptance audit](docs/acceptance.md) separates
 implemented/local-tested behavior from the missing live evidence and plugin work.
+For continuation on another system, use the [outstanding-work handoff](TODO.md).
 Remote commands are wired through noninteractive sessions with document preflight,
 separate output and verified exit status; compatible documents are required.
 Native TCP forwarding is wired through fixed AWS documents, exact-destination

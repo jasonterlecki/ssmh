@@ -391,6 +391,7 @@ ssmh/
 ├── AGENTS.md
 ├── CODEX.md
 ├── PROMPT.md
+├── TODO.md
 ├── README.md
 ├── LICENSE
 ├── Makefile
@@ -604,6 +605,18 @@ Purpose:
 Defines the initial project objectives, required functionality, and proposed
 architecture. It is planning input, not evidence that planned components are
 implemented.
+
+### TODO.md
+
+Status: IMPLEMENTED (portable outstanding-work handoff, not completion evidence)
+
+Prioritized continuation checklist with baseline/source links, unresolved native
+startup/PTY failures, exact placeholder-based local/live commands, scoped prior
+live results, remaining executable/provider/command/forwarding/plugin/release
+gates and new-system prerequisites. Excludes actual target/account identifiers,
+credentials, auth payloads and internal goal state. README links it; update its
+affected checklist/evidence when work advances. Documentation link tests include
+its repository file links, not correctness of live results or command effects.
 
 ### README.md
 
@@ -2273,7 +2286,7 @@ shell examples or resolves credentials.
 `acceptance_test.go` compares the audit inventory with numbered PROMPT sections,
 acceptance criteria and actual CLI flag registrations. It guards omissions only;
 it does not validate row assessments, evidence sufficiency or live functionality.
-`links_test.go` verifies simple inline repository file links in README and every
+`links_test.go` verifies simple inline repository file links in README, TODO and every
 docs guide resolve to existing regular files inside the repository. It does not
 validate heading anchors, arbitrary CommonMark constructs or external websites.
 

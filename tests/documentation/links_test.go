@@ -19,7 +19,7 @@ func TestGuideLocalFileLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files := []string{filepath.Join(root, "README.md")}
+	files := []string{filepath.Join(root, "README.md"), filepath.Join(root, "TODO.md")}
 	entries, err := os.ReadDir(filepath.Join(root, "docs"))
 	if err != nil {
 		t.Fatal(err)
