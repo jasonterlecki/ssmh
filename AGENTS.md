@@ -777,7 +777,41 @@ When Git is introduced:
 - Do not bypass configured security checks.
 - Do not modify Git configuration without authorization.
 
-Never automatically commit changes unless instructed to do so.
+### Mandatory Add, Commit and Push After Each Change
+
+The project owner authorizes and requires agents to automatically stage, commit
+and push every completed logical change, including code, tests, documentation
+and repository instructions. Do not wait for another commit/push request.
+Treat a change as the coherent task change, not each individual file edit;
+finish its tests, security review and CODEX.md synchronization before committing.
+
+After each change:
+
+1. Inspect Git status, the branch, configured remote and the complete diff.
+2. Run applicable validation and the mandatory final review. Do not commit
+   known failing or unfinished work as completed; report any blocker instead.
+3. Stage only task-owned files with explicit `git add` paths. Preserve unrelated
+   user edits; never include secrets, credentials, debug logs or build binaries.
+4. Review the staged diff and run `git diff --cached --check`.
+5. Make a concise descriptive commit without attribution trailers or signatures.
+6. Push the current branch to its configured upstream using a normal,
+   non-force push. If no upstream exists, use an already configured intended
+   remote only when the target branch is unambiguous; otherwise ask the owner.
+7. Verify push success and report the commit hash, branch and remaining changes.
+
+Use the existing Git identity. If it is missing, the owner-approved identity is
+`Jason Terlecki <jterlecki@gmail.com>`; supply it with per-command `git -c`
+options rather than changing repository/global Git configuration.
+
+If Git, a remote, authentication or push permission is missing, or a push is
+rejected, report the exact safe blocker and whether a local commit exists.
+Never claim an unsuccessful push succeeded. Do not force-push, rewrite history,
+bypass hooks, install credentials, discard changes or change remotes/configuration
+to make publication work. Resolve conflicts with the owner when needed.
+This standing authorization covers source commits/pushes only, not release
+publication, Git initialization, AWS actions or unrelated external changes.
+An explicit instruction for a particular task not to commit or push takes
+precedence over this default workflow.
 
 Do not add:
 
@@ -873,6 +907,8 @@ A feature is complete only when:
 - Existing behavior is preserved unless intentionally changed.
 - User-facing documentation is updated.
 - `CODEX.md` synchronization has been completed and verified.
+- The completed change has been staged, committed and pushed under Section 21,
+  or a commit/push blocker has been explicitly reported.
 
 Do not describe incomplete features as production-ready.
 
@@ -897,6 +933,8 @@ Before finishing a development task, the agent MUST:
     and verify that file references, implementation status, security boundaries,
     and architectural relationships are accurate.
 11. Summarize unresolved security risks.
+12. Stage, commit and push the validated task-owned change under Section 21,
+    verify the result and report any publication blocker.
 
 The final response should briefly include:
 
@@ -905,6 +943,7 @@ The final response should briefly include:
 - Security considerations.
 - Known limitations.
 - Whether `CODEX.md` was updated.
+- Commit hash, push result and any remaining uncommitted changes.
 
 If a security requirement could not be satisfied, explicitly disclose it.
 

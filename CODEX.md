@@ -547,6 +547,13 @@ Contains:
 - Git and change-management restrictions.
 
 This file is authoritative for project-specific security policy.
+Section 21 also provides standing owner authorization and a mandatory workflow
+to stage, commit and normally push each completed, validated logical change,
+including docs/instructions, after security review and CODEX synchronization.
+Only task-owned explicit paths are staged; unrelated edits/secrets/binaries are
+excluded. Missing identity uses the owner-approved per-command identity without
+Git configuration changes. Push failures are reported, never force-resolved;
+the authorization does not extend to release publication or AWS actions.
 
 ### CODEX.md
 
@@ -758,7 +765,7 @@ same SSMH_TEST_TCP opt-in. A private CONNECT proxy permits only selected regiona
 EC2/SSM/ssmmessages/KMS host:443 requests and tunnels exclusively to the local
 synthetic TLS service. The child has explicit fake environment credentials,
 /dev/null shared config/credentials, disabled IMDS, an owner-only temporary public
-test CA and explicit proxy; no inherited app environment, endpoint override or
+test CA selected through --ca-cert and explicit proxy; no inherited app environment, endpoint override or
 disabled TLS verification. Private TLS keys stay in memory. All eleven command/
 pipe-shell cases also exercise real process exit codes/top-level diagnostics and
 fresh owned cleanup, with signed fake identity/service/region assertions.
@@ -1014,7 +1021,13 @@ identity or API workflow. Core/EC2/SSM/Smithy/x/sys pins remain unchanged; lates
 version inventory is reviewed separately and is not a blanket upgrade approval.
 
 Custom CA support is implemented through the SDK's BuildableClient resolver:
-AWS_CA_BUNDLE takes precedence over the selected shared ca_bundle, with SDK PEM
+optional --ca-cert/-ca (Options.CACert) takes precedence over AWS_CA_BUNDLE and
+selected shared ca_bundle. CLI paths are bounded to 4096 bytes without controls;
+an explicitly empty flag is refused. readCABundle in client.go uses a nonblocking
+read-only open, accepts only regular files up to 4 MiB, bounds reads including
+growth and closes before SDK resolution. Relative paths/spaces are preserved;
+no environment mutation or path/content diagnostics. WithCustomCABundle supplies
+the bounded bytes before credential clients capture configuration, with SDK PEM
 loading/failure semantics. A pre-resolution Proxy-selection guard checks signed
 destinations and rejects redirected requests before transmission on every builder
 copy. It delegates valid original requests to the configured/environment proxy.
@@ -1025,11 +1038,14 @@ TLS roots, 30-second request/15-second header budgets and ordinary idle cleanup.
 Native sockets inherit these roots/proxies. CA selection does not authorize new
 service endpoints or disable hostname/certificate verification. Explicit custom
 roots replace system defaults as the SDK does; include every required trust root.
-SDK CA file reads/PEM parsing remain SDK-managed, not application-size-bounded.
-ca_test.go covers environment/profile precedence, malformed/missing CA failure
+Environment/profile CA file reads remain SDK-managed and not size-bounded;
+CLI file reads can still block on regular filesystem I/O. SDK parses PEM.
+ca_test.go covers CLI/environment/profile precedence, malformed/missing CA failure
 redaction, builder-copy guards, all redirect classes and proxy delegation; real
 in-memory TLS verifies accepted roots and rejects unknown roots/wrong hostnames
-before HTTP authentication bytes are transmitted. No real proxy/live AWS proof.
+before HTTP authentication bytes are transmitted. Compiled TLS shell/command
+fixtures now trust their public CA through --ca-cert rather than AWS_CA_BUNDLE,
+exercising CLI-to-SDK-to-native CA propagation. No live custom-CA proof.
 
 Directory:
 
@@ -2386,7 +2402,8 @@ permission-test sessions or automatic infrastructure changes are suggested.
 Implemented actual Makefile/toolchain/test/build workflow, target artifacts,
 offline-cache limits, synthetic versus opted-in OS/live verification, scanner
 absence, fuzz/race scope, security/CODEX review and remaining release gates.
-Documents only exact generated-file cleanup; no automatic commits/publishing.
+Documents only exact generated-file cleanup and the AGENTS.md standing source
+commit/push workflow; release publication remains separately authorized.
 
 Do not create empty documentation files simply to match the
 proposed structure.

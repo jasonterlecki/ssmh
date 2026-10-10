@@ -3,7 +3,11 @@
 Read [AGENTS.md](../AGENTS.md) and [CODEX.md](../CODEX.md) before changes. The source
 is authoritative; update CODEX with changed file responsibilities, interfaces,
 security boundaries and implementation status in the same task. Do not initialize
-Git, select a license, commit or publish unless explicitly authorized. Existing
+Git, select a license or publish releases unless explicitly authorized. Source
+commits and pushes are authorized and required after each completed logical
+change by AGENTS.md Section 21: validate, synchronize CODEX.md, inspect and stage
+only task-owned files, commit and normally push to the configured upstream.
+Report blockers instead of forcing pushes or changing Git configuration. Existing
 worktree changes belong to the user. The project is still a development client,
 not a certified or live-validated release.
 

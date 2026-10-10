@@ -147,13 +147,19 @@ permissions. Valid credentials or an Online agent do not exercise StartSession
 permission. Errors omit raw SDK/provider output that may contain secrets.
 
 Custom service endpoints and HTTP redirects are refused. TLS verification and
-environment proxy support remain enabled. `AWS_CA_BUNDLE` and shared `ca_bundle`
-are loaded through the SDK, with the environment setting taking precedence over
-the selected shared profile. Missing/unreadable/invalid PEM bundles fail closed
+environment proxy support remain enabled. Optional `--ca-cert PATH` (alias `-ca`)
+selects a PEM bundle using SDK WithCustomCABundle before credential-client setup.
+Precedence is CLI, then `AWS_CA_BUNDLE`, then selected shared `ca_bundle`.
+Omitting the option preserves SDK behavior. Relative paths and spaces are allowed;
+quote paths containing spaces. Explicit empty paths, controls and paths exceeding
+4096 bytes are refused. The CLI opens read-only/nonblocking, accepts only regular
+files, limits reads to 4 MiB and closes before SDK loading. It never mutates the
+environment or prints the path/file contents. Missing/unreadable/invalid bundles fail closed
 with redacted errors. Explicit custom bundles replace system roots, following SDK
 semantics: include every required CA, including the roots needed for AWS services.
-Do not disable certificate or hostname verification. CA file reads/parsing remain
-SDK-managed and are not application-size-bounded or context-interruptible; trust
+Do not disable certificate or hostname verification. Environment/profile CA file
+reads remain SDK-managed and not application-size-bounded; PEM parsing is SDK-owned.
+Regular filesystem reads are not context-interruptible even for CLI paths; trust
 the configured local file. A blocked filesystem can exceed the setup deadline.
 
 Guards are installed before SDK resolution and retained by builder copies, so

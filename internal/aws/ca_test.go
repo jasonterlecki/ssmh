@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -64,12 +65,15 @@ func TestCustomCASelectionAndPrecedence(t *testing.T) {
 		t.Fatal("write public CA fixtures")
 	}
 	for _, tc := range []struct {
-		env, profile       string
+		env, profile, cli  string
 		selected, rejected *x509.Certificate
 	}{
-		{firstPath, "", first, second}, {"", secondPath, second, first},
-		{firstPath, secondPath, first, second}, {firstPath, "/missing-profile-ca", first, second},
+		{firstPath, "", "", first, second}, {"", secondPath, "", second, first},
+		{firstPath, secondPath, "", first, second}, {firstPath, "/missing-profile-ca", "", first, second},
+		{firstPath, firstPath, secondPath, second, first},
+		{"/missing-environment-ca", "/missing-profile-ca", secondPath, second, first},
 	} {
+		o.CACert = tc.cli
 		t.Setenv("AWS_CA_BUNDLE", tc.env)
 		content := "[default]\nregion = ca-central-1\n"
 		if tc.profile != "" {
@@ -117,12 +121,17 @@ func TestCustomCAFailureIsClosedAndRedacted(t *testing.T) {
 		t.Fatal("write invalid public fixture")
 	}
 	for _, path := range []string{invalid, filepath.Join(t.TempDir(), "synthetic-secret-missing.pem")} {
-		for _, environment := range []bool{false, true} {
+		for _, selection := range []string{"profile", "environment", "cli"} {
+			o.CACert = ""
 			t.Setenv("AWS_CA_BUNDLE", "")
 			profile := "[default]\n"
-			if environment {
+			if selection == "environment" {
 				t.Setenv("AWS_CA_BUNDLE", path)
 				profile += "ca_bundle = " + valid + "\n" // No fallback after explicit CA failure.
+			} else if selection == "cli" {
+				o.CACert = path
+				t.Setenv("AWS_CA_BUNDLE", valid)
+				profile += "ca_bundle = " + valid + "\n"
 			} else {
 				profile += "ca_bundle = " + path + "\n"
 			}
@@ -133,6 +142,25 @@ func TestCustomCAFailureIsClosedAndRedacted(t *testing.T) {
 			if err == nil || cfg.Credentials != nil || cfg.HTTPClient != nil || strings.Contains(err.Error(), "synthetic-secret") {
 				t.Fatal("invalid CA silently ignored, leaked or returned usable credentials")
 			}
+		}
+	}
+}
+
+func TestExplicitCAFileBoundsAndType(t *testing.T) {
+	o := caOptions(t)
+	large := filepath.Join(t.TempDir(), "synthetic-secret-large.pem")
+	fifo := filepath.Join(t.TempDir(), "synthetic-secret-fifo.pem")
+	if syscall.Mkfifo(fifo, 0600) != nil {
+		t.Fatal("cannot prepare FIFO fixture")
+	}
+	if os.WriteFile(large, make([]byte, (4<<20)+1), 0600) != nil {
+		t.Fatal("cannot prepare oversized fixture")
+	}
+	for _, path := range []string{large, fifo, t.TempDir(), "/dev/null"} {
+		o.CACert = path
+		cfg, err := Load(context.Background(), o, nil)
+		if err == nil || cfg.Credentials != nil || strings.Contains(err.Error(), "synthetic-secret") {
+			t.Fatal("unsafe CA file accepted or leaked")
 		}
 	}
 }

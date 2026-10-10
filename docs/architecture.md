@@ -92,7 +92,10 @@ SDK-managed SSO cache updates are distinct from application credential storage.
 See [authentication](authentication.md) and [IAM prerequisites](iam-policy.md).
 
 Custom CA/profile selection uses the SDK builder with guards installed before
-resolution. Builder copies refuse redirects and unsupported signed endpoints,
+resolution. Optional --ca-cert/-ca supplies bounded regular-file PEM bytes through
+WithCustomCABundle before credential clients capture the configuration; it
+overrides environment/profile CA selection without mutating either. Builder
+copies refuse redirects and unsupported signed endpoints,
 respect proxies and disable keepalives; the returned application client owns a
 guarded pool. Native WebSockets inherit the selected roots/proxies, verify TLS
 and upgrade before token submission, and never disable certificate validation.

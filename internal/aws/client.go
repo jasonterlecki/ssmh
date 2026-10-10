@@ -2,13 +2,17 @@
 package aws
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	sdk "github.com/aws/aws-sdk-go-v2/aws"
@@ -61,6 +65,13 @@ func Load(ctx context.Context, o config.Options, prompt TokenProvider) (sdk.Conf
 	if o.Region != "" {
 		opts = append(opts, sdkconfig.WithRegion(o.Region))
 	}
+	if o.CACert != "" {
+		bundle, err := readCABundle(o.CACert)
+		if err != nil {
+			return sdk.Config{}, err
+		}
+		opts = append(opts, sdkconfig.WithCustomCABundle(bytes.NewReader(bundle)))
+	}
 	cfg, err := sdkconfig.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
 		return sdk.Config{}, logging.Failure("load AWS configuration", err)
@@ -106,6 +117,30 @@ func Load(ctx context.Context, o config.Options, prompt TokenProvider) (sdk.Conf
 	}
 	loaded = true
 	return cfg, nil
+}
+
+// Explicit CA files are trusted user-selected configuration, not credential
+// files. Nonblocking open refuses FIFO/device inputs without waiting for a peer.
+// No contents, path or OS errors enter diagnostics; SDK parses the bounded PEM.
+func readCABundle(path string) ([]byte, error) {
+	const limit = 4 << 20
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, errors.New("cannot read --ca-cert PEM bundle; check the path and file permissions")
+	}
+	info, statErr := f.Stat()
+	if statErr != nil || !info.Mode().IsRegular() || info.Size() > limit {
+		if f.Close() != nil {
+			return nil, errors.New("--ca-cert file rejected and its descriptor could not be closed")
+		}
+		return nil, errors.New("--ca-cert must refer to a regular PEM bundle no larger than 4 MiB")
+	}
+	bundle, readErr := io.ReadAll(io.LimitReader(f, limit+1))
+	closeErr := f.Close()
+	if readErr != nil || closeErr != nil || len(bundle) > limit {
+		return nil, errors.New("cannot read bounded --ca-cert PEM bundle")
+	}
+	return bundle, nil
 }
 
 // Assume installs an SDK-refreshable role credential cache and eagerly authenticates.

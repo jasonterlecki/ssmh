@@ -71,7 +71,7 @@ compiled help covers these registrations and explains backend limitations:
 
 | Group | Required names/aliases |
 | --- | --- |
-| Connection/authentication | `--instance/-i`, `--profile/-p`, `--region/-r`, `--arn`, `--session-name`, `--external-id`, `--mfa-serial`, `--mfa-token` |
+| Connection/authentication | `--instance/-i`, `--profile/-p`, `--region/-r`, `--arn`, `--session-name`, `--external-id`, `--mfa-serial`, `--mfa-token`, `--ca-cert/-ca` (`--ca` also accepted) |
 | Execution | `--command/-c`, `--document`, `--reason`, `--forward/-L`, `--forward-host` |
 | Discovery/check | `--list`, `--name`, `--state`, repeatable `--tag`, `--json`, `--check` |
 | Runtime/diagnostics | `--timeout`, `--duration`, `--backend`, `--verbose/-v`, `--debug`, `--quiet/-q` |

@@ -28,6 +28,7 @@ func Flags(o *config.Options, out io.Writer) *flag.FlagSet {
 		{&o.Instance, []string{"instance", "i"}, "", "EC2 instance ID or exact Name tag"},
 		{&o.Profile, []string{"profile", "p"}, "", "AWS shared profile"},
 		{&o.Region, []string{"region", "r"}, "", "AWS region (no implicit default)"},
+		{&o.CACert, []string{"ca-cert", "ca"}, "", "PEM CA bundle path (overrides AWS_CA_BUNDLE and profile ca_bundle)"},
 		{&o.RoleARN, []string{"arn"}, "", "IAM role ARN to assume"},
 		{&o.SessionName, []string{"session-name"}, "", "STS role session name"},
 		{&o.ExternalID, []string{"external-id"}, "", "STS external ID"},
@@ -95,6 +96,9 @@ func Parse(args []string) (config.Options, error) {
 		}
 	}
 	f.Visit(func(v *flag.Flag) {
+		if (v.Name == "ca-cert" || v.Name == "ca") && o.CACert == "" {
+			o.CACert = "\x00"
+		}
 		if (v.Name == "command" || v.Name == "c") && strings.TrimSpace(o.Command) == "" {
 			o.Command = "\x00"
 		}

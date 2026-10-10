@@ -32,6 +32,22 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestCACertFlags(t *testing.T) {
+	for _, flag := range []string{"-ca", "--ca-cert", "-ca-cert", "--ca"} {
+		for _, args := range [][]string{{"-i", "web", flag, "path with spaces/ca-bundle.pem"}, {"--list", flag + "=path with spaces/ca-bundle.pem"}} {
+			o, err := Parse(args)
+			if err != nil || o.CACert != "path with spaces/ca-bundle.pem" {
+				t.Fatal("CA path/alias not preserved")
+			}
+		}
+		for _, args := range [][]string{{"-i", "web", flag}, {"-i", "web", flag, ""}, {"-i", "web", flag + "="}, {"-i", "web", flag, "synthetic-secret\x00path"}, {"-i", "web", flag, strings.Repeat("x", 4097)}} {
+			if _, err := Parse(args); err == nil || strings.Contains(err.Error(), "synthetic-secret") {
+				t.Fatal("invalid CA option accepted or leaked")
+			}
+		}
+	}
+}
+
 func TestGNUShortFlagsAndCommandPreservation(t *testing.T) {
 	o, err := Parse([]string{"-viweb", "-pproduction", "-rca-central-1", "-L8080:80"})
 	if err != nil || !o.Verbose || o.Instance != "web" || o.Profile != "production" || o.Forward != "8080:80" {

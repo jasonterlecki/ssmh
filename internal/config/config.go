@@ -15,6 +15,7 @@ import (
 // Options describes one invocation. MFA tokens must never be serialized or logged.
 type Options struct {
 	Instance, Profile, Region, RoleARN, SessionName, ExternalID string
+	CACert                                                      string
 	MFASerial, MFAToken                                         string
 	Command, Document, Reason, Backend                          string
 	Forward, ForwardHost                                        string
@@ -90,6 +91,9 @@ func (o Options) Validate() error {
 	}
 	if !Text(o.Profile, 256) {
 		return errors.New("invalid AWS profile name")
+	}
+	if !Text(o.CACert, 4096) {
+		return errors.New("--ca-cert requires a PEM bundle path of at most 4096 bytes without control characters")
 	}
 	if o.RoleARN != "" && (len(o.RoleARN) > 2048 || !roleARN.MatchString(o.RoleARN) || strings.Contains(o.RoleARN, "//")) {
 		return errors.New("invalid IAM role ARN")

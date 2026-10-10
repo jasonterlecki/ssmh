@@ -77,10 +77,14 @@ stricter: exact regional `ssmmessages` host, expected session path, secure WebSo
 scheme and expected stream role. Commercial, China and GovCloud stream hosts are
 supported; other partitions/alternate endpoints are not yet supported. Supported
 HTTP proxy configuration remains in effect, not silently bypassed. Local trust
-roots/proxy settings are part of the trust boundary. AWS_CA_BUNDLE/selected shared
-ca_bundle are SDK-loaded, with environment precedence and explicit roots replacing
-system defaults. Invalid bundles fail closed; configured CA files are trusted
-local inputs, and SDK file reads/parsing have no application-added size bound.
+roots/proxy settings are part of the trust boundary. Optional --ca-cert/-ca has
+precedence over AWS_CA_BUNDLE and selected shared ca_bundle; omitting it preserves
+SDK environment/profile precedence. Explicit roots replace system defaults.
+Invalid bundles fail closed; configured CA files are trusted local inputs.
+CLI paths accept only regular files with bounded 4 MiB reads through nonblocking
+open; paths/contents/errors are not printed. SDK environment/profile file reads
+and PEM parsing have no application-added size bound. Regular filesystem reads
+can still block beyond cancellation. No process-global settings are changed.
 Pre-resolution builder copies retain signed-endpoint and redirect guards through
 connection selection, including direct/pooled requests; supported proxy behavior
 is delegated, not bypassed. Captured SDK credential clients disable keepalives

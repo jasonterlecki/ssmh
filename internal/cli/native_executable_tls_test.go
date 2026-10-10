@@ -76,7 +76,7 @@ func TestNativeExecutableTLSComposition(t *testing.T) {
 }
 
 func (e *compositionExecutable) environment(proxy string) []string {
-	return []string{"LANG=C", "LC_ALL=C", "AWS_ACCESS_KEY_ID=synthetic-key", "AWS_SECRET_ACCESS_KEY=synthetic-secret", "AWS_CONFIG_FILE=/dev/null", "AWS_SHARED_CREDENTIALS_FILE=/dev/null", "AWS_EC2_METADATA_DISABLED=true", "AWS_CA_BUNDLE=" + e.roots, "HTTPS_PROXY=" + proxy, "HTTP_PROXY=" + proxy, "NO_PROXY="}
+	return []string{"LANG=C", "LC_ALL=C", "AWS_ACCESS_KEY_ID=synthetic-key", "AWS_SECRET_ACCESS_KEY=synthetic-secret", "AWS_CONFIG_FILE=/dev/null", "AWS_SHARED_CREDENTIALS_FILE=/dev/null", "AWS_EC2_METADATA_DISABLED=true", "HTTPS_PROXY=" + proxy, "HTTP_PROXY=" + proxy, "NO_PROXY="}
 }
 
 func compositionBuildEnvironment(inherited []string) []string {

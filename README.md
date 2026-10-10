@@ -344,11 +344,19 @@ Current session stream validation accepts exact regional `ssmmessages` hosts in
 commercial, China, and GovCloud regions. Other partitions and alternate stream
 endpoints are not supported yet. TLS verification remains enabled and normal
 HTTP proxy configuration is preserved.
-`AWS_CA_BUNDLE` and selected shared `ca_bundle` are SDK-loaded with environment
-precedence. Invalid bundles fail closed; explicit roots replace system defaults,
+Optional `--ca-cert path/ca-bundle.pem` (alias `-ca`) selects a PEM CA bundle for
+SDK requests and the native WebSocket. It overrides `AWS_CA_BUNDLE` and the
+selected profile's `ca_bundle`; without it, existing SDK precedence is unchanged.
+The CLI accepts a regular file up to 4 MiB, including relative paths.
+Invalid bundles fail closed; explicit roots replace system defaults,
 so include all required AWS/proxy trust roots. Certificate/hostname verification,
 redirect refusal and signed-endpoint guards remain enabled. See
 [custom CA behavior](docs/authentication.md).
+
+```sh
+./dist/ssmh-linux-amd64 -i i-0123456789abcdef0 -r us-east-1 -p default \
+  -ca path/ca-bundle.pem
+```
 
 Cleanup is best effort, retryable after failure, and restricted to sessions
 returned by this process's successful StartSession call. No client can guarantee

@@ -215,6 +215,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 				err = run(ctx, args, input, out, stderr, d)
 				code = ExitCode(err)
 			} else {
+				args = append(args, "--ca-cert", executable.roots)
 				proxy := compositionProxy(t, server.Listener.Addr().String())
 				defer proxy.Close()
 				cmd := exec.CommandContext(ctx, executable.path, args...)
