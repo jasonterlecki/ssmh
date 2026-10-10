@@ -135,6 +135,21 @@ Cleanup denial/timeout remains a visible failure even when the remote operation
 succeeded. An authorized operator should inspect and clean up the exact owned
 session through approved AWS tooling; never terminate unrelated sessions. This
 client does not list sessions or persist a cleanup credential/token file.
+For shells, normal authenticated owned-session closure plus successful local
+shutdown now releases ownership without another TerminateSession call, matching
+the [official remote-close handler](https://github.com/aws/session-manager-plugin/blob/mainline/src/datachannel/streaming.go)
+and [shell Stop](https://github.com/aws/session-manager-plugin/blob/mainline/src/sessionmanagerplugin/session/shellsession/shellsession_unix.go).
+Debug reports `owned shell ended remotely; redundant TerminateSession skipped`.
+This is not triggered by socket EOF, local escape, cancellation, malformed frames
+or failed local I/O/shutdown. Those paths still attempt cleanup, as do commands
+and forwarding. No blanket suppression of ValidationException is introduced.
+Failure diagnostics include a fixed category, an exact allowlisted AWS error code
+(or `unrecognized`) and an HTTP status when the SDK supplies one. For example,
+`category=aws-service aws_code=InternalServerError http_status=500` identifies a
+service response, not a local timeout. Messages, response bodies, headers, URLs
+and request IDs remain omitted. `unclassified` does not identify the cause.
+An error code alone is not proof the session has ended; cleanup failures remain
+failures until verified through approved AWS tooling.
 Command status is known only with valid typed status, owned EOF, delivered output
 and successful cleanup; interruption or missing status is not remote success.
 

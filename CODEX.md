@@ -63,7 +63,17 @@ EC2 resolution/running-state validation, Linux SSM
 Online verification, owned StartSession, native Connect and terminal Run.
 Authenticated document preflight precedes shell/command session creation. One
 setup budget bounds all establishment stages; optional duration bounds the owned
-session lifetime. Cleanup uses a fresh ten-second context after terminal shutdown.
+session lifetime. Cleanup uses a fresh ten-second context after terminal shutdown,
+except a successfully returned shell whose real native channel reports normal
+authenticated owned-session closure after joined shutdown. That path releases
+session ownership/token/key references without redundant TerminateSession, matching
+the official shell's remote-close behavior. Only shell mode uses this exception;
+commands, forwarding, local disconnect, cancellation, setup/protocol/network/local
+I/O failures retain explicit best-effort termination. No ValidationException is
+ignored. RemoteCompleted checks the finalized channel result; transport EOF alone
+grants nothing. ReleaseAfterRemoteCompletion is a trusted orchestration boundary,
+not a network or SDK probe. Unit and compiled/in-process TLS tests cover normal
+remote completion versus disconnect/cleanup denial, without asserting live proof.
 `internal/version/version.go` supplies linker-injected version metadata.
 `aws/identity.go` adds read-only STS caller metadata through `IdentityAPI`, with
 bounded account/ARN validation and no credential/UserId fields or fallback.
@@ -737,8 +747,9 @@ The same file's TestNativeShellTLSComposition runs the production terminal loop
 against a document-owned non-KMS TLS peer with pipe input. Default StartSession
 DocumentName stays omitted; first ordered output establishes readiness without
 an invented handshake. ANSI/UTF-8 output and input/Ctrl+C/one EOF Ctrl+D are
-preserved. Normal owned close, transport loss and cleanup denial all exercise
-owned termination; HTTP 403 also fails before terminal readiness. Denied upgrades
+preserved. Normal owned close now releases ownership without redundant API
+termination; transport loss and cleanup denial still exercise explicit owned
+termination. HTTP 403 also fails before terminal readiness. Denied upgrades
 emit no application bytes, reveal no response body and make no KMS request;
 owned termination still runs with a fresh context. Failures never become successful EOF. It proves local composed
 pipe behavior, not physical TTY controls, resize/restoration or remote apps.
@@ -750,7 +761,9 @@ synthetic TLS service. The child has explicit fake environment credentials,
 test CA and explicit proxy; no inherited app environment, endpoint override or
 disabled TLS verification. Private TLS keys stay in memory. All eleven command/
 pipe-shell cases also exercise real process exit codes/top-level diagnostics and
-fresh owned cleanup, with signed fake identity/service/region assertions. Proxy
+fresh owned cleanup, with signed fake identity/service/region assertions.
+Cleanup-denial cases assert the real SDK error reaches diagnostics as only its
+allowlisted service code and HTTP status, without response-body secrets. Proxy
 admission closes before joining relay workers; sockets have twelve-second bounds.
 This is compiled native-host local integration, not live AWS, ARM64 execution or
 a physical TTY/app test. It uses ordinary supported production proxy/CA settings;
@@ -2041,8 +2054,15 @@ data stream as a raw socket.
 
 Current files: `errors.go` and `errors_test.go`. `Failure` exposes allowlisted
 messages without retaining raw SDK/credential-provider causes; `SafeText` removes
-terminal controls and Unicode format controls from diagnostic metadata. Logger
-configuration and detailed protocol diagnostics below are still planned.
+terminal controls and Unicode format controls from diagnostic metadata.
+Failure also appends fixed cancellation/timeout/network/AWS-service/unclassified
+categories, exact allowlisted AWS error codes (unknown codes become unrecognized)
+and a validated 100–599 HTTP status when a concrete SDK/Smithy response supplies
+one. It never prints response messages, bodies, headers, URLs or request IDs and
+retains no cause. Tests cover SDK operation/HTTP wrappers, secret-bearing unknown
+codes, malformed response metadata and local failures. Cleanup success semantics
+are unchanged: no service error is silently treated as an already-ended session.
+Logger configuration and detailed protocol diagnostics below are still planned.
 The CLI's `diagnostics.go` currently owns allowlisted lifecycle-stage reporting
 and validated identity presentation using private cancellable terminal Streams;
 debug SDK operation summaries are collected by `aws/metrics.go` and drained by

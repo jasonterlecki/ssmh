@@ -4,10 +4,13 @@ package logging
 import (
 	"context"
 	"errors"
+	"net"
+	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // SafeText escapes untrusted metadata for diagnostic terminal display.
@@ -25,6 +28,51 @@ func SafeText(s string) string {
 
 // Failure returns actionable messages without retaining or exposing secret-bearing causes.
 func Failure(operation string, err error) error {
+	message := failureMessage(operation, err)
+	category, code := "unclassified", ""
+	var api smithy.APIError
+	var network *net.OpError
+	switch {
+	case errors.Is(err, context.Canceled):
+		category = "canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		category = "timeout"
+	case errors.As(err, &api) && api != nil:
+		category = "aws-service"
+		// Codes are untrusted response text. Only exact reviewed literals may
+		// enter diagnostics; neither messages nor arbitrary codes are printed.
+		selectedCode := api.ErrorCode()
+		switch selectedCode {
+		case "AccessDenied", "AccessDeniedException", "UnauthorizedOperation",
+			"ExpiredToken", "ExpiredTokenException", "InvalidClientTokenId", "UnrecognizedClientException",
+			"TargetNotConnected", "Throttling", "ThrottlingException", "TooManyRequestsException",
+			"InvalidDocument", "InternalServerError", "InternalServerException",
+			"InvalidSessionId", "DoesNotExistException", "ValidationException", "ValidationError",
+			"InvalidParameters", "ResourceNotFoundException", "SerializationException":
+			code = selectedCode
+		default:
+			code = "unrecognized"
+		}
+	case errors.As(err, &network) && network != nil:
+		category = "network"
+	}
+	details := "category=" + category
+	if code != "" {
+		details += " aws_code=" + code
+	}
+	var response *smithyhttp.ResponseError
+	if errors.As(err, &response) && response != nil && response.Response != nil && response.Response.Response != nil {
+		status := response.Response.StatusCode
+		if status >= 100 && status <= 599 {
+			details += " http_status=" + strconv.Itoa(status)
+		}
+	}
+	// Return a fresh text-only error: no retained cause, URL, response, header,
+	// request ID, provider output or credential-bearing object.
+	return errors.New(message.Error() + " (" + details + ")")
+}
+
+func failureMessage(operation string, err error) error {
 	if errors.Is(err, context.Canceled) {
 		return errors.New(operation + ": canceled")
 	}

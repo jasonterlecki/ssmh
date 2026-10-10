@@ -170,6 +170,11 @@ first output, ANSI/UTF-8 fidelity, Ctrl+C/EOF bytes, owned close, network loss a
 cleanup denial or upgrade refusal. It does not test raw TTY, resize or physical-key behavior.
 Default tests skip before credentials or sockets; these open only temporary
 local synthetic listeners.
+Normal authenticated shell closure plus successful local shutdown now skips a
+redundant TerminateSession; the composed tests assert zero termination calls on
+that path. The cleanup-denied shell fixture now drops transport without a closure
+notification, proving failures still invoke explicit termination. Command
+cleanup semantics are unchanged.
 
 The compiled-binary variant exercises the same cases without injecting loader,
 SDK, transport or terminal dependencies:

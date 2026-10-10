@@ -22,6 +22,14 @@ main.go or cmd/ssmh -> app: signal cancellation, final reporting and process exi
         -> fresh-context owned TerminateSession after local shutdown
 ```
 
+The shell-only normal remote-close path is an exception to the final API step:
+after successful terminal shutdown, the real native channel must report
+authenticated owned-session closure and joined error-free transport shutdown.
+CLI then releases session/token/key ownership without redundant TerminateSession,
+matching official plugin shell behavior. Local disconnect/cancellation/errors and
+all command/forwarding paths retain fresh-context explicit cleanup. No API error
+is suppressed; socket EOF by itself cannot authorize the exception.
+
 CLI `connect.go` shares identity, setup/lifetime deadlines, MFA disablement,
 diagnostics and AWS cleanup across the three implemented operations. Both
 executable entry points delegate to the same app.Execute; plain root `go build`

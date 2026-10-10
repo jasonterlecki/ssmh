@@ -237,7 +237,11 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 			if encrypted && mode != "upgrade-denied" {
 				wantKeys = 1
 			}
-			if starts.Load() != 1 || ends.Load() != 1 || keys.Load() != wantKeys {
+			wantEnds := int32(1)
+			if shell && mode == "plain" {
+				wantEnds = 0
+			}
+			if starts.Load() != 1 || ends.Load() != wantEnds || keys.Load() != wantKeys {
 				t.Fatal("composed ownership/key call count changed")
 			}
 			if mode == "plain" || mode == "encrypted" {
@@ -263,6 +267,15 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 			}
 			if mode == "upgrade-denied" && (code != 1 || ctx.Err() != nil) {
 				t.Fatal("authorization denial did not fail promptly with local failure status")
+			}
+			if mode == "cleanup-denied" {
+				diagnostic := err.Error()
+				if executable != nil {
+					diagnostic = cliText(t, stderr)
+				}
+				if !strings.Contains(diagnostic, "category=aws-service aws_code=AccessDeniedException http_status=400") {
+					t.Fatal("cleanup lost safe SDK service/HTTP classification")
+				}
 			}
 			select {
 			case peerErr := <-peerDone:
@@ -334,7 +347,7 @@ func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string)
 	if string(received) != "synthetic shell input\n\x03\x04" {
 		return errors.New("composed shell input/EOF/control bytes changed")
 	}
-	if mode == "network-drop" {
+	if mode == "network-drop" || mode == "cleanup-denied" {
 		return nil
 	}
 	if err = send("channel_closed", 0, 0, []byte(`{"SessionId":"unit-owned"}`)); err != nil {

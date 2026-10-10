@@ -176,6 +176,7 @@ func connect(ctx context.Context, o config.Options, input, output, stderr *os.Fi
 		request.Reason = sdkaws.String(o.Reason)
 	}
 	var session *ssm.Session
+	var channel terminal.Channel
 	var lifetimeErr error
 	operationStarted := false
 	sessionStarted, err := diagnostic.begin(stageSession)
@@ -219,7 +220,21 @@ func connect(ctx context.Context, o config.Options, input, output, stderr *os.Fi
 			cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			started := time.Now()
-			cleanupErr := session.Terminate(cleanup) // Cleanup precedes diagnostic output.
+			var cleanupErr error
+			completed, nativeChannel := channel.(*native.Channel)
+			if o.Command == "" && !forwarding && operationStarted && result == nil && nativeChannel && completed.RemoteCompleted() {
+				// AWS already sent authenticated normal owned-session closure.
+				// Match official shell behavior rather than terminating it again.
+				session.ReleaseAfterRemoteCompletion()
+				if o.Debug {
+					_, cleanupErr = fmt.Fprintln(diagnostic.writer, "ssmh: owned shell ended remotely; redundant TerminateSession skipped")
+					if cleanupErr != nil {
+						cleanupErr = errors.New("cannot write remote-completion diagnostics")
+					}
+				}
+			} else {
+				cleanupErr = session.Terminate(cleanup)
+			}
 			result = errors.Join(result, diagnostic.termination(parentErr, lifetimeErr, result, operationStarted, o.Duration > 0), diagnostic.end(stageCleanup, started, cleanupErr))
 		}()
 	}
@@ -248,7 +263,6 @@ func connect(ctx context.Context, o config.Options, input, output, stderr *os.Fi
 	if remaining <= 0 {
 		return diagnostic.end(stageChannel, channelStarted, errors.New("SSM connection establishment timed out"))
 	}
-	var channel terminal.Channel
 	if forwarding {
 		channel, err = d.connectForward(lifetime, cfg, session, target, remaining)
 	} else {

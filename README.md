@@ -96,6 +96,11 @@ be available. AWS authorization remains authoritative; Online status does not
 prove StartSession permission. The default session document and remote user are
 controlled by Session Manager; the client does not request root or modify IAM,
 instance settings, or security groups.
+On normal authenticated remote shell closure, successful local shutdown releases
+ownership without a redundant TerminateSession call, following the official
+plugin's shell behavior. Local disconnects, cancellation and failures still
+attempt explicit best-effort termination. Commands and forwarding keep explicit
+cleanup; a ValidationException is not silently treated as success.
 See [IAM permissions and deployment prerequisites](docs/iam-policy.md) for a
 single-instance policy review template, IAM-user versus federated cleanup,
 necessary wildcard read access, and an unresolved AWS data-channel scoping

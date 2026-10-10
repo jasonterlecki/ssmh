@@ -83,6 +83,9 @@ func TestNativeChannelBidirectionalStreamAndOwnedEOF(t *testing.T) {
 	defer cancel()
 	ctx, trace := WithTrace(ctx)
 	c := startChannel(ctx, cancel, &Socket{stream: local}, protocol(t))
+	if c.RemoteCompleted() {
+		t.Fatal("unfinished channel claimed remote completion")
+	}
 	agentDone := make(chan error, 1)
 	publicationSent := make(chan struct{})
 	go func() {
@@ -168,6 +171,9 @@ func TestNativeChannelBidirectionalStreamAndOwnedEOF(t *testing.T) {
 	if err := c.Close(); err != nil {
 		t.Fatal(err)
 	}
+	if !c.RemoteCompleted() {
+		t.Fatal("authenticated normal owned EOF did not authorize remote completion")
+	}
 	labels := traceLabels(t, trace)
 	if len(labels) != 6 || labels[0] != "protocol readiness pending" || labels[1] != "protocol handshake verified" || labels[2] != "protocol publication paused" || labels[3] != "protocol publication resumed" || labels[4] != "owned-session EOF verified" || labels[5] != "WebSocket closed" {
 		t.Fatal("authenticated handshake trace did not preserve state order")
@@ -212,6 +218,29 @@ func TestNativeChannelDisconnectIsFailure(t *testing.T) {
 	}
 	if _, err := c.Receive(context.Background()); err == nil || errors.Is(err, io.EOF) {
 		t.Fatal("network disconnect represented as successful remote execution")
+	}
+	if c.RemoteCompleted() {
+		t.Fatal("network loss authorized skipping AWS cleanup")
+	}
+}
+
+func TestRemoteCompletionRequiresSuccessfulJoinedClosure(t *testing.T) {
+	for _, tc := range []struct {
+		remote  bool
+		failure error
+		want    bool
+	}{
+		{true, nil, true}, {false, nil, false},
+		{true, context.Canceled, false}, {true, errors.New("close failed"), false},
+	} {
+		c := &Channel{done: make(chan struct{}), remoteCompleted: tc.remote, err: tc.failure}
+		if c.RemoteCompleted() {
+			t.Fatal("unjoined completion granted")
+		}
+		close(c.done)
+		if c.RemoteCompleted() != tc.want {
+			t.Fatal("completion classification changed")
+		}
 	}
 }
 

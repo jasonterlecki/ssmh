@@ -217,6 +217,14 @@ service; other local users can access the bound loopback port.
 
 On controllable exit paths, channel workers stop before saved terminal settings
 are restored and owned AWS cleanup is attempted with a fresh ten-second context.
+The exception is a successfully completed shell with authenticated normal
+owned-session closure and joined error-free native shutdown: CLI releases the
+session/token/key references without redundant TerminateSession, matching the
+official remote-close behavior. Only the concrete native channel can supply this
+completion signal. The session release method is a trusted orchestration boundary,
+not a validation bypass or permission probe. Socket EOF, local escape, cancellation,
+malformed frames or I/O/shutdown failures do not authorize it. Commands/forwarding
+still terminate explicitly. No ValidationException is silently ignored.
 Physical Ctrl+C/Ctrl+D in raw mode are remote bytes; external termination signals
 cancel locally. The TTY-only line-start `~.` escape disconnects locally. Duration
 limits are local and do not override server-side policy.

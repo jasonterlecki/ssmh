@@ -150,6 +150,17 @@ func (s *Session) DocumentKMSContext() (sessionType, key string) {
 	return s.kmsType, s.kmsKey
 }
 
+// ReleaseAfterRemoteCompletion releases ownership and transport references without
+// an API call. The caller must first verify authenticated owned-session closure
+// and successful local shutdown; socket EOF or cancellation alone is insufficient.
+func (s *Session) ReleaseAfterRemoteCompletion() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.terminated = true
+	s.stream, s.token = "", ""
+	s.kmsKey, s.kmsType = "", ""
+}
+
 // Terminate performs idempotent owned-session cleanup. Failed cleanup may be retried.
 func (s *Session) Terminate(ctx context.Context) error {
 	s.mu.Lock()

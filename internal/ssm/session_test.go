@@ -15,6 +15,29 @@ import (
 
 const testID = "synthetic-user-0123456789abcdef0"
 
+func TestReleaseAfterVerifiedRemoteCompletion(t *testing.T) {
+	f := api()
+	s, err := Start(context.Background(), f, input(), "ca-central-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.kmsKey, s.kmsType = "synthetic-key", "Standard_Stream"
+	s.ReleaseAfterRemoteCompletion()
+	if _, _, _, live := s.OwnedContext(); live {
+		t.Fatal("remote-completed ownership retained")
+	}
+	_, stream, token := s.TransportMaterial()
+	if stream != "" || token != "" {
+		t.Fatal("remote-completed transport references retained")
+	}
+	if kind, key := s.DocumentKMSContext(); kind != "" || key != "" {
+		t.Fatal("remote-completed KMS capability retained")
+	}
+	if err := s.Terminate(context.Background()); err != nil || f.terminates != 0 {
+		t.Fatal("remote-completed session terminated redundantly")
+	}
+}
+
 func TestOwnedContextLifetimeAndImmutableTarget(t *testing.T) {
 	for _, s := range []*Session{nil, {}} {
 		if id, target, region, live := s.OwnedContext(); live || id != "" || target != "" || region != "" {

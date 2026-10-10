@@ -27,20 +27,34 @@ type wireRead struct {
 // Channel owns the socket reader and a single protocol event loop. Output is
 // bounded and consumed by Receive; application/terminal data is never logged.
 type Channel struct {
-	cancel         context.CancelFunc
-	done, ready    chan struct{}
-	input          chan inputRequest
-	output         chan Message
-	mu             sync.Mutex
-	err            error
-	forwardTarget  *config.ForwardTarget
-	forwardServing bool
+	cancel          context.CancelFunc
+	done, ready     chan struct{}
+	input           chan inputRequest
+	output          chan Message
+	mu              sync.Mutex
+	err             error
+	remoteCompleted bool
+	forwardTarget   *config.ForwardTarget
+	forwardServing  bool
 }
 
 func (c *Channel) String() string {
 	return "SSM native channel [authentication and stream data redacted]"
 }
 func (c *Channel) GoString() string { return c.String() }
+
+// RemoteCompleted reports authenticated normal owned-session closure only after
+// socket/reader shutdown has joined successfully. Transport EOF is not completion.
+func (c *Channel) RemoteCompleted() bool {
+	select {
+	case <-c.done:
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.remoteCompleted && c.err == nil
+	default:
+		return false
+	}
+}
 
 // Connect establishes a native shell/command channel and waits for the verified
 // agent handshake, or first ordered output for a verified non-KMS shell. The
@@ -186,6 +200,7 @@ func (c *Channel) sendEnded() error {
 
 func (c *Channel) run(ctx context.Context, socket *Socket, p *Protocol) {
 	var result error
+	remoteCompleted := false
 	recordTrace(ctx, traceWaiting)
 	stopClose := context.AfterFunc(ctx, func() { _ = socket.Close() })
 	defer stopClose()
@@ -227,6 +242,7 @@ func (c *Channel) run(ctx context.Context, socket *Socket, p *Protocol) {
 		<-readerDone
 		c.mu.Lock()
 		c.err = result
+		c.remoteCompleted = remoteCompleted && result == nil
 		c.mu.Unlock()
 		close(c.output)
 		close(c.done)
@@ -330,6 +346,7 @@ func (c *Channel) run(ctx context.Context, socket *Socket, p *Protocol) {
 				}
 			}
 			if event.Closed {
+				remoteCompleted = true
 				recordTrace(ctx, traceOwnedEOF)
 				return
 			}
