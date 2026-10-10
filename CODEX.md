@@ -557,6 +557,11 @@ Contains:
 - Git and change-management restrictions.
 
 This file is authoritative for project-specific security policy.
+Section 2 defines execution discipline: reuse unchanged instructions in context,
+inspect targeted components, preserve scoped acceptance evidence, bound repeated
+investigations and distinguish operation-specific blockers from whole-goal
+impasses. Missing plugin dependencies do not block native work. Validation is
+proportional to the changed boundary without waiving security/completion gates.
 Section 21 also provides standing owner authorization and a mandatory workflow
 to stage, commit and normally push each completed, validated logical change,
 including docs/instructions, after security review and CODEX synchronization.

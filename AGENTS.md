@@ -27,8 +27,8 @@ Never compromise security to make a feature work.
 
 Any AI coding agent working on this repository MUST:
 
-- Read `AGENTS.md` before making changes.
-- Read `CODEX.md` before exploring or modifying project files.
+- Read `AGENTS.md` before making changes, using the context-reuse rules below.
+- Read `CODEX.md` before exploring or modifying project files, using the same rules.
 - Follow existing architectural conventions.
 - Inspect relevant source code before editing.
 - Understand security implications before implementing changes.
@@ -52,6 +52,64 @@ If instructions conflict, follow this priority:
 5. Existing implementation conventions.
 
 Raise conflicts rather than silently bypassing them.
+
+### Execution Discipline and Context Efficiency
+
+Security review is mandatory; repetitive review is not progress. These rules
+prevent unbounded context consumption and stalled implementation:
+
+1. Read AGENTS.md and CODEX.md once per working context. Reuse their contents
+   while they remain available and unchanged; check Git status/diffs for updates
+   and reread only changed or relevant sections. After context loss, recover the
+   applicable instructions and component map, not the entire repository history.
+   Read newly applicable instructions before acting on them.
+2. For each task, identify the concrete outcome, affected components, next action
+   and verification needed. Use targeted `rg` searches and bounded file reads.
+   Do not repeatedly dump PROMPT.md, CODEX.md or whole directories. A full
+   requirement audit belongs at an actual completion decision or scope change,
+   not at every incremental edit or automatic continuation.
+3. Prefer implementing and verifying the next unmet requirement over expanding
+   plans, inventories or documentation. Necessary documentation updates count
+   as task work, but repeated status rewrites do not substitute for working code
+   or new acceptance evidence. Do not manufacture small changes to keep a goal
+   active or satisfy the commit rule.
+4. Before retrying a failed approach, state what new evidence or changed condition
+   makes the retry useful. After two unsuccessful investigation cycles with the
+   same result, change approach or report the exact blocker. Do not rerun passed
+   tests, unchanged dependency checks or identical searches without a relevant
+   code/environment change, diagnostic purpose or required validation gate.
+5. Reuse a compact evidence ledger: requirement, implementation/test result,
+   evidence scope and next missing proof. Preserve known results across turns;
+   distinguish owner-reported live evidence, agent-run live tests and synthetic
+   tests. Never forget a demonstrated result or overgeneralize it to untested
+   features. Do not store secrets or raw session transcripts in the ledger.
+6. Scope blockers to the operation they actually prevent. Native ssmh and native
+   tests do not require AWS CLI or session-manager-plugin. An absent official
+   plugin blocks installed-plugin verification, not native development. Missing
+   live approval blocks those AWS operations, not safe local implementation.
+   Separate incomplete code from missing authorization, tools or verification.
+7. Ask once for missing authority, with the exact proposed operation and effects.
+   Automatic goal continuation is not approval. While awaiting an answer, pursue
+   independent authorized work if it advances the objective; do not repeatedly
+   ask, poll unchanged prerequisites or present the same blocker as progress.
+   Never install dependencies, alter AWS resources or weaken controls to unblock
+   work without the required authority.
+8. On goal continuations, classify the last turn as progress, verified wait or
+   no progress using actual state/evidence. A wait requires a confirmed live
+   process/job handle. Keep an explicit consecutive-blocker count; mark a goal
+   blocked only at the platform-required threshold and only after independent
+   safe next steps are exhausted. Do not keep an actually blocked goal spinning,
+   or mark the whole goal blocked merely because one branch cannot proceed.
+9. Keep validation proportional to the changed boundary. Run affected tests
+   during iteration and the required broader gates before finishing significant
+   code changes. Documentation-only changes need relevant documentation checks
+   and diff review, not repeated full runtime/race/build/security suites unless
+   they change executable examples or another tested contract requiring them.
+10. Report outcomes concisely: delivered change, actual validation, remaining
+    scoped blocker and commit/push result. If asked about usage, use recorded
+    metrics; distinguish cumulative tokens from context-window size and billing.
+    If work consumes disproportionate effort without progress, disclose it and
+    change course instead of continuing an audit/retry loop.
 
 ---
 
@@ -104,7 +162,8 @@ knowingly leave the map inaccurate or outdated.
 
 Before making changes:
 
-1. Read `AGENTS.md` and `CODEX.md` before modifying relevant code.
+1. Read `AGENTS.md` and `CODEX.md` before modifying relevant code; reuse
+   unchanged instructions already available in context under Section 2.
 2. Use `CODEX.md` to identify relevant components, file responsibilities,
    dependencies, architectural relationships, and security boundaries.
 3. Verify the relevant descriptions against the actual source.
