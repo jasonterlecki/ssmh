@@ -194,16 +194,23 @@ an owner-only temporary public test CA; private TLS keys remain in memory and
 certificate verification stays enabled. No service endpoint override, production
 test switch, AWS call or host AWS profile is used. Exit statuses and top-level
 stderr diagnostics are checked along with session/stream/cleanup behavior.
-The `shell/tty-sigterm` case additionally attaches a private Linux PTY to the
-actual executable. Its synthetic peer must receive initial 80x24 dimensions
-before the test verifies raw mode. Before sending a real SIGTERM, the test also
+The `shell/tty-sigterm`, `shell/tty-escape` and `shell/tty-remote-close` cases
+additionally attach a private Linux PTY to the actual executable. Its synthetic
+peer must receive initial 80x24 dimensions before the test verifies raw mode.
+Before initiating each exit, the test also
 verifies SIGWINCH delivers a changed 120x40 size and physical Ctrl+C/Ctrl+D
 written through the master arrive unchanged at the synthetic peer without
-terminating the local client. The child must then return
-130, make one owned TerminateSession request and restore the exact original
+terminating the local client. The SIGTERM case must then return 130, make one
+owned TerminateSession request and restore the exact original
 termios state before process join returns. The user's terminal is untouched;
 failure cleanup kills/reaps the child before closing the private PTY. It does not prove
 remote control-byte interpretation or full-screen remote apps.
+The latter two cases use the same dimension/control probes, then exit without
+SIGTERM: the documented Enter/~. local escape must send only its newline to the
+peer, return 0 and terminate the owned session once; authenticated owned remote
+completion must return 0 without redundant TerminateSession. Both must restore
+the full termios state after joined shutdown. The remote-close peer waits for
+explicit harness confirmation that control assertions finished before closing.
 This still does not prove live AWS, ARM64 runtime or remote TTY/application behavior.
 
 The private plugin credential relay also has opted-in OS socket tests:

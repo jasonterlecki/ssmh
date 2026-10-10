@@ -34,8 +34,8 @@ type compositionExecutable struct {
 
 // Exercise the real process signal boundary with a private PTY, never the user's
 // terminal. The synthetic peer confirms initial/resized dimensions and physical
-// control-byte delivery before SIGTERM; raw ioctl state alone proves neither.
-func compositionTTYSignal(t *testing.T, ctx context.Context, cmd *exec.Cmd, ready, controls <-chan struct{}) error {
+// control-byte delivery before each exit; raw ioctl state alone proves neither.
+func compositionTTYExit(t *testing.T, ctx context.Context, cmd *exec.Cmd, mode string, ready, controls <-chan struct{}, finish chan<- struct{}) error {
 	t.Helper()
 	master, err := unix.Open("/dev/ptmx", unix.O_RDWR|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
 	if err != nil {
@@ -98,8 +98,20 @@ func compositionTTYSignal(t *testing.T, ctx context.Context, cmd *exec.Cmd, read
 	case <-ctx.Done():
 		t.Fatal("compiled TTY resize/control delivery exceeded its budget")
 	}
-	if cmd.Process.Signal(unix.SIGTERM) != nil {
-		t.Fatal("cannot signal compiled TTY client")
+	close(finish)
+	switch mode {
+	case "tty-sigterm":
+		if cmd.Process.Signal(unix.SIGTERM) != nil {
+			t.Fatal("cannot signal compiled TTY client")
+		}
+	case "tty-escape":
+		if n, err := unix.Write(master, []byte("\n~.")); err != nil || n != 3 {
+			t.Fatal("cannot send compiled TTY local escape")
+		}
+	case "tty-remote-close":
+		// The authenticated peer now closes the owned session.
+	default:
+		t.Fatal("unknown compiled TTY exit mode")
 	}
 	select {
 	case err = <-done:

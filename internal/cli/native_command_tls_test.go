@@ -50,7 +50,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 	if shell {
 		modes = []string{"plain", "network-drop", "cleanup-denied", "upgrade-denied"}
 		if executable != nil {
-			modes = append(modes, "tty-sigterm")
+			modes = append(modes, "tty-sigterm", "tty-escape", "tty-remote-close")
 		}
 	}
 	for _, mode := range modes {
@@ -62,6 +62,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 			peerDone := make(chan error, 1)
 			ttyReady := make(chan struct{})
 			ttyControls := make(chan struct{})
+			ttyFinish := make(chan struct{})
 			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if executable != nil && !compositionSignedRequest(r) {
 					t.Error("compiled invocation lost signed selected-service routing")
@@ -76,7 +77,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 						return
 					}
 					if shell {
-						peerDone <- composedPlainShellPeer(r, w, mode, ttyReady, ttyControls)
+						peerDone <- composedPlainShellPeer(r, w, mode, ttyReady, ttyControls, ttyFinish)
 					} else {
 						peerDone <- composedCommandPeer(r, w, encrypted, mode, material, keyARN)
 					}
@@ -201,7 +202,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 			if shell {
 				args = []string{"-i", cliTarget, "-r", "ca-central-1", "-q"}
 			}
-			if shell && mode != "tty-sigterm" {
+			if shell && !strings.HasPrefix(mode, "tty-") {
 				read, write, err := os.Pipe()
 				if err != nil {
 					t.Fatal("cannot create synthetic shell input")
@@ -231,8 +232,8 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 				cmd.Stderr = stderr
 				cmd.Stdin = input
 				cmd.WaitDelay = time.Second
-				if mode == "tty-sigterm" {
-					err = compositionTTYSignal(t, ctx, cmd, ttyReady, ttyControls)
+				if strings.HasPrefix(mode, "tty-") {
+					err = compositionTTYExit(t, ctx, cmd, mode, ttyReady, ttyControls, ttyFinish)
 				} else {
 					err = cmd.Run()
 				}
@@ -250,13 +251,17 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 				wantKeys = 1
 			}
 			wantEnds := int32(1)
-			if shell && mode == "plain" {
+			if shell && (mode == "plain" || mode == "tty-remote-close") {
 				wantEnds = 0
 			}
 			if starts.Load() != 1 || ends.Load() != wantEnds || keys.Load() != wantKeys {
 				t.Fatal("composed ownership/key call count changed")
 			}
-			if mode == "plain" || mode == "encrypted" {
+			if mode == "tty-escape" || mode == "tty-remote-close" {
+				if err != nil || code != 0 || ctx.Err() != nil || cliText(t, stderr) != "" {
+					t.Fatal("compiled TTY normal disconnect failed")
+				}
+			} else if mode == "plain" || mode == "encrypted" {
 				wantedCode, wantedOut, wantedErr := 37, "synthetic stdout", "synthetic stderr"
 				if shell {
 					wantedCode = 0
@@ -306,7 +311,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 
 const compositionShellOutput = "synthetic shell λ\x1b[32mcolor\x1b[0m\r\n"
 
-func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string, ttyReady, ttyControls chan<- struct{}) error {
+func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string, ttyReady, ttyControls chan<- struct{}, ttyFinish <-chan struct{}) error {
 	conn, buffer, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		return err
@@ -346,7 +351,7 @@ func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string,
 	if err != nil || op != 2 || decodeErr != nil || m.Type != "acknowledge" {
 		return errors.New("composed shell first-output ACK missing")
 	}
-	if mode == "tty-sigterm" {
+	if strings.HasPrefix(mode, "tty-") {
 		op, data, err = compositionReadWS(buffer)
 		m, decodeErr = native.Decode(data)
 		var size struct{ Cols, Rows int }
@@ -392,6 +397,25 @@ func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string,
 			return errors.New("compiled TTY Ctrl+C/Ctrl+D bytes changed")
 		}
 		close(ttyControls)
+		if mode == "tty-remote-close" {
+			select {
+			case <-ttyFinish:
+			case <-time.After(8 * time.Second):
+				return errors.New("compiled TTY completion coordination timed out")
+			}
+			if err = send("channel_closed", 0, 0, []byte(`{"SessionId":"unit-owned"}`)); err != nil {
+				return err
+			}
+			_, _ = conn.Read(make([]byte, 1))
+			return nil
+		}
+		if mode == "tty-escape" {
+			op, data, err = compositionReadWS(buffer)
+			m, decodeErr = native.Decode(data)
+			if err != nil || op != 2 || decodeErr != nil || m.Type != "input_stream_data" || m.PayloadType != native.Output || string(m.Payload) != "\n" {
+				return errors.New("compiled TTY local escape leaked or changed remote input")
+			}
+		}
 		op, _, err = compositionReadWS(buffer)
 		if err == io.EOF || err == io.ErrUnexpectedEOF || err == nil && op == 8 {
 			return nil
