@@ -196,11 +196,14 @@ test switch, AWS call or host AWS profile is used. Exit statuses and top-level
 stderr diagnostics are checked along with session/stream/cleanup behavior.
 The `shell/tty-sigterm` case additionally attaches a private Linux PTY to the
 actual executable. Its synthetic peer must receive initial 80x24 dimensions
-before the test verifies raw mode and sends a real SIGTERM. The child must return
+before the test verifies raw mode. Before sending a real SIGTERM, the test also
+verifies SIGWINCH delivers a changed 120x40 size and physical Ctrl+C/Ctrl+D
+written through the master arrive unchanged at the synthetic peer without
+terminating the local client. The child must then return
 130, make one owned TerminateSession request and restore the exact original
 termios state before process join returns. The user's terminal is untouched;
-failure cleanup kills/reaps the child before closing the private PTY. This does
-not prove physical Ctrl+C/D, changed dimensions or full-screen remote apps.
+failure cleanup kills/reaps the child before closing the private PTY. It does not prove
+remote control-byte interpretation or full-screen remote apps.
 This still does not prove live AWS, ARM64 runtime or remote TTY/application behavior.
 
 The private plugin credential relay also has opted-in OS socket tests:

@@ -61,6 +61,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 			var starts, ends, keys atomic.Int32
 			peerDone := make(chan error, 1)
 			ttyReady := make(chan struct{})
+			ttyControls := make(chan struct{})
 			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if executable != nil && !compositionSignedRequest(r) {
 					t.Error("compiled invocation lost signed selected-service routing")
@@ -75,7 +76,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 						return
 					}
 					if shell {
-						peerDone <- composedPlainShellPeer(r, w, mode, ttyReady)
+						peerDone <- composedPlainShellPeer(r, w, mode, ttyReady, ttyControls)
 					} else {
 						peerDone <- composedCommandPeer(r, w, encrypted, mode, material, keyARN)
 					}
@@ -231,7 +232,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 				cmd.Stdin = input
 				cmd.WaitDelay = time.Second
 				if mode == "tty-sigterm" {
-					err = compositionTTYSignal(t, ctx, cmd, ttyReady)
+					err = compositionTTYSignal(t, ctx, cmd, ttyReady, ttyControls)
 				} else {
 					err = cmd.Run()
 				}
@@ -305,7 +306,7 @@ func testNativeTLSComposition(t *testing.T, shell bool, executable *compositionE
 
 const compositionShellOutput = "synthetic shell λ\x1b[32mcolor\x1b[0m\r\n"
 
-func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string, ttyReady chan<- struct{}) error {
+func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string, ttyReady, ttyControls chan<- struct{}) error {
 	conn, buffer, err := w.(http.Hijacker).Hijack()
 	if err != nil {
 		return err
@@ -357,6 +358,40 @@ func composedPlainShellPeer(r *http.Request, w http.ResponseWriter, mode string,
 			return err
 		}
 		close(ttyReady)
+		resized := false
+		var controls []byte
+		for count := 0; !resized || len(controls) < 2; count++ {
+			if count == 8 {
+				return errors.New("compiled TTY controls exceeded frame budget")
+			}
+			op, data, err = compositionReadWS(buffer)
+			m, decodeErr = native.Decode(data)
+			if err != nil || op != 2 || decodeErr != nil || m.Type != "input_stream_data" {
+				return errors.New("compiled TTY control delivery failed")
+			}
+			switch m.PayloadType {
+			case native.Size:
+				if json.Unmarshal(m.Payload, &size) != nil || size.Cols != 120 || size.Rows != 40 {
+					return errors.New("compiled TTY resized dimensions changed")
+				}
+				resized = true
+			case native.Output:
+				if len(controls)+len(m.Payload) > 2 {
+					return errors.New("compiled TTY control bytes exceeded bound")
+				}
+				controls = append(controls, m.Payload...)
+			default:
+				return errors.New("compiled TTY unexpected control payload")
+			}
+			ack, _ := json.Marshal(map[string]any{"AcknowledgedMessageType": m.Type, "AcknowledgedMessageId": m.ID.String(), "AcknowledgedMessageSequenceNumber": m.Sequence, "IsSequentialMessage": true})
+			if err = send("acknowledge", 0, 0, ack); err != nil {
+				return err
+			}
+		}
+		if !bytes.Equal(controls, []byte{3, 4}) {
+			return errors.New("compiled TTY Ctrl+C/Ctrl+D bytes changed")
+		}
+		close(ttyControls)
 		op, _, err = compositionReadWS(buffer)
 		if err == io.EOF || err == io.ErrUnexpectedEOF || err == nil && op == 8 {
 			return nil

@@ -789,7 +789,10 @@ allowlisted service code and HTTP status, without response-body secrets. Proxy
 admission closes before joining relay workers; sockets have twelve-second bounds.
 The additional tty-sigterm case gives the compiled child a private Linux PTY,
 waits for authenticated initial 80x24 size delivery, checks raw termios, sends
-actual SIGTERM and requires exit 130, one owned termination and exact full-state
+SIGWINCH after resizing to 120x40 and injects physical Ctrl+C/Ctrl+D through the
+master PTY. The peer verifies changed dimensions and exact control bytes with
+bounded frame admission before actual SIGTERM. Local execution must survive
+those input bytes; SIGTERM requires exit 130, one owned termination and exact full-state
 restoration after process join. Failed tests kill/reap the child before PTY close;
 the developer's terminal is never used. This is compiled native-host local
 integration, not live AWS, ARM64 execution or remote TTY/application proof.

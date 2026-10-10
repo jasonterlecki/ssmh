@@ -33,9 +33,9 @@ type compositionExecutable struct {
 }
 
 // Exercise the real process signal boundary with a private PTY, never the user's
-// terminal. The synthetic peer confirms resize delivery before SIGTERM; a raw
-// ioctl observation alone would not prove channel establishment.
-func compositionTTYSignal(t *testing.T, ctx context.Context, cmd *exec.Cmd, ready <-chan struct{}) error {
+// terminal. The synthetic peer confirms initial/resized dimensions and physical
+// control-byte delivery before SIGTERM; raw ioctl state alone proves neither.
+func compositionTTYSignal(t *testing.T, ctx context.Context, cmd *exec.Cmd, ready, controls <-chan struct{}) error {
 	t.Helper()
 	master, err := unix.Open("/dev/ptmx", unix.O_RDWR|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
 	if err != nil {
@@ -83,6 +83,20 @@ func compositionTTYSignal(t *testing.T, ctx context.Context, cmd *exec.Cmd, read
 	raw, err := unix.IoctlGetTermios(fd, unix.TCGETS)
 	if err != nil || raw.Lflag&(unix.ECHO|unix.ICANON|unix.ISIG) != 0 {
 		t.Fatal("compiled TTY client did not enter raw mode")
+	}
+	if unix.IoctlSetWinsize(fd, unix.TIOCSWINSZ, &unix.Winsize{Col: 120, Row: 40}) != nil || cmd.Process.Signal(unix.SIGWINCH) != nil {
+		t.Fatal("cannot resize compiled-client PTY")
+	}
+	if n, err := unix.Write(master, []byte{3, 4}); err != nil || n != 2 {
+		t.Fatal("cannot send physical compiled-client control bytes")
+	}
+	select {
+	case <-controls:
+	case <-done:
+		joined = true
+		t.Fatal("compiled TTY control bytes terminated the local client")
+	case <-ctx.Done():
+		t.Fatal("compiled TTY resize/control delivery exceeded its budget")
 	}
 	if cmd.Process.Signal(unix.SIGTERM) != nil {
 		t.Fatal("cannot signal compiled TTY client")
