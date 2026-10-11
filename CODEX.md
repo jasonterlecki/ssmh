@@ -391,6 +391,7 @@ ssmh/
 │
 ├── AGENTS.md
 ├── CODEX.md
+├── FINDINGS.md
 ├── PROMPT.md
 ├── TODO.md
 ├── README.md
@@ -598,6 +599,16 @@ Maintains the repository map, component responsibilities, and
 architectural reference.
 
 Must be updated when files or responsibilities change.
+
+### FINDINGS.md
+
+Status: IMPLEMENTED (dated feasibility review, not completion or test evidence)
+
+Records which outstanding TODO/PROMPT items cannot be accomplished as written,
+which need the owner or different hardware/AWS scope, and an unapplied
+recommendation to descope the plugin backend. Point-in-time as of its review
+date and commit; it changes no checklist state. Contains no target/account
+identifiers or authentication material. Not covered by documentation link tests.
 
 ### PROMPT.md
 
